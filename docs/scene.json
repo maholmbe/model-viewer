@@ -1,7 +1,7 @@
 {
-  "version": 2,
+  "version": 3,
   "generator": "Blender 5.2.2 LTS / model_viewer_export",
-  "generatedAt": 1791808501,
+  "generatedAt": 1791814061,
   "title": "Hand drill",
   "model": {
     "src": "hand_drill.glb",
@@ -38,13 +38,14 @@
       "position": [
         0.0,
         -0.1348,
-        0.0155
+        0.0154
       ],
       "normal": [
         0.0,
         -0.0,
         1.0
       ],
+      "surface": "0 0 666 667 668 0.3703 0.4793 0.1504",
       "camera": {
         "source": "CAM_chuck",
         "target": [
@@ -81,6 +82,7 @@
         -0.0,
         1.0
       ],
+      "surface": "1 0 632 634 635 0.3249 0.5494 0.1257",
       "camera": {
         "source": "CAM_crank",
         "target": [
@@ -108,7 +110,7 @@
       "label": "Drill bit",
       "description": "Holes in the making",
       "position": [
-        0.0034,
+        0.0032,
         -0.1992,
         -0.0
       ],
@@ -117,6 +119,7 @@
         0.0,
         -0.0
       ],
+      "surface": "2 0 204 205 203 0.2723 0.0675 0.6602",
       "camera": {
         "source": "CAM_drillbit",
         "target": [
@@ -146,13 +149,14 @@
       "position": [
         0.0,
         0.2498,
-        -0.0
+        0.0
       ],
       "normal": [
         0.0,
         1.0,
         -0.0
       ],
+      "surface": "6 0 544 545 566 0.0000 0.0004 0.9995",
       "camera": {
         "source": "CAM_handle",
         "target": [
@@ -181,7 +185,7 @@
       "description": "For people with three hands",
       "position": [
         0.0,
-        0.0,
+        -0.0,
         -0.061
       ],
       "normal": [
@@ -189,6 +193,7 @@
         -0.0,
         -1.0
       ],
+      "surface": "7 0 111 113 127 0.1020 0.0000 0.8980",
       "camera": {
         "source": "CAM_knob",
         "target": [
@@ -236,6 +241,7 @@
     "shadowIntensity": 0.0,
     "background": null
   },
+  "variants": null,
   "animations": [
     "chuckAction",
     "crankAction",

@@ -8,6 +8,7 @@ clicked.
 ```
 blender_addon/model_viewer_export/   the add-on (Blender 4.4+, tested on 5.2.2)
   core.py                            scene collection + export logic
+  glb.py                             reads the exported GLB back (incl. Draco)
   __init__.py                        properties, operators, sidebar UI
   templates/                         index.html, viewer.js, viewer.css
 tools/build_demo.py                  builds + exports a demo scene
@@ -60,6 +61,21 @@ Select an `HS_` empty to see the **Active Hotspot** panel:
 - **Play**: Once (holds the last frame), Loop, or Ping-pong
 - **Reverse on Exit**: play backwards when leaving (Once only)
 - **Delay**: seconds to wait for the camera move before the animation starts
+- **Stick to Mesh / Mesh**: pin the hotspot to the mesh surface so it moves with the animation (see below)
+
+### Hotspots that follow the animation
+
+Turn on **Stick to Mesh** for a hotspot on a moving part, such as the crank
+of a drill or a door. The export finds the nearest point on the mesh and
+writes it as a model-viewer
+[surface hotspot](https://modelviewer.dev/examples/annotations/#animatedHotspots).
+The hotspot is then pinned to that triangle and follows it when the part
+moves, rotates or deforms (skinned meshes work too).
+
+- It sticks to the **Mesh** set in the panel. Otherwise it uses the empty's parent, if that's a mesh, or else the nearest exported mesh. Parenting the `HS_` empty to the part it belongs to is the easiest way to set it up.
+- The hotspot is moved onto the surface. The export warns if the empty is far from the mesh.
+- Works with and without Draco compression. The position is computed from the exported GLB.
+- If several objects share the mesh (linked duplicates), the hotspot can end up on another copy. Make the mesh single-user to avoid that.
 
 ### Animations
 
@@ -74,6 +90,28 @@ Select an `HS_` empty to see the **Active Hotspot** panel:
 - Camera roll and lens shift aren't supported by model-viewer.
 - **Hotspot Camera from View** in the panel creates or updates `CAM_<id>` for the selected hotspot from the current viewport position. **Home Camera from View** does the same for `CAM_home`.
 - Camera orbit and zoom limits are widened automatically so close-ups aren't clamped.
+
+### Material variants
+
+Variants are alternative sets of materials, such as colours or finishes, that
+the visitor can switch between on the page. They're exported as
+`KHR_materials_variants`, and the page shows a button for each variant
+(bottom right).
+
+Panel **Model Viewer → Material Variants**:
+
+1. Assign the materials for the first variant in Blender, select the objects that change, and click **+**. This creates a variant from the selected objects' current materials. Double-click to rename it; the name is shown on the button.
+2. Assign the materials for the next variant and click **+** again. To change an existing variant, select it, set the materials, select the objects and click **Store Selected**.
+3. **Apply** assigns a variant's materials in Blender, to check or edit it. The list under the buttons shows what's stored (object · slot → material). Remove an entry with ×.
+
+Things to know:
+
+- The page loads with the materials the scene has **at export time**. If those match a variant, that button starts out selected. Otherwise an extra **Original** button is added.
+- A slot that a variant doesn't mention keeps its default material.
+- Only exported objects count. Order the buttons with the arrows.
+- Turn the whole feature off with the checkbox in the panel header. *Variant Picker* hides the buttons but still exports the variants.
+- Under the hood this uses the glTF exporter's own variant support. The add-on rebuilds that data on every export, so don't use the glTF add-on's own *Material Variants* panel at the same time.
+- With *Apply Modifiers*, meshes that have variants are briefly given their modifiers applied during the export (the glTF exporter loses variants on meshes with modifiers otherwise). Everything is restored afterwards. Meshes deformed by an armature are skipped with a warning.
 
 ### Environment / lighting
 
@@ -127,9 +165,8 @@ project, and set *Viewer Files → Always Overwrite* to refresh them.
 
 Ideas that fit this structure:
 
-- Hotspots that follow animated parts (model-viewer `data-surface` hotspots)
 - Several animations at once (`appendAnimation` / `detachAnimation`)
-- Material/colour variants (`KHR_materials_variants` + a variant picker)
+- Switch the material variant from a hotspot
 - AR button (`ar ar-modes="webxr scene-viewer quick-look"`)
 - Guided tour: step through hotspots in `order` with next/prev buttons
 - Multiple languages for labels and descriptions
@@ -142,5 +179,8 @@ blender -b --factory-startup --python tools/build_demo.py
 ```
 
 This builds `demo/demo_cabinet.blend` (door, lid + gadget, spinner, three
-hotspots, three cameras, Blender's bundled forest HDRI rotated 45°) and
-exports it to `docs/`.
+hotspots, three cameras, Blender's bundled forest HDRI rotated 45°). The
+door and lid hotspots stick to their meshes, and the door comes in three
+colour variants. It exports to `docs/`, or to the folder given after `--`.
+Note that `docs/` currently holds the hand drill, so export the demo
+somewhere else, e.g. `-- /tmp/demo`.

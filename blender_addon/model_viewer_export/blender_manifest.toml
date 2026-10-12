@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "model_viewer_export"
-version = "0.1.0"
+version = "0.2.0"
 name = "Model Viewer Export"
 tagline = "Export GLB, cameras, hotspots and HDR for Google model-viewer"
 maintainer = "Mats Holmberg"

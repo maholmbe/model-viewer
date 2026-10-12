@@ -7,6 +7,7 @@ const infoTitle = document.querySelector('#info-title');
 const infoText = document.querySelector('#info-text');
 const backBtn = document.querySelector('#back');
 const bgToggle = document.querySelector('#bg-toggle');
+const variantBar = document.querySelector('#variants');
 
 const vec = (v, unit = 'm') => v.map((c) => `${c}${unit}`).join(' ');
 const orbit = ([theta, phi, radius]) => `${theta}deg ${phi}deg ${radius}m`;
@@ -61,6 +62,8 @@ async function init() {
     });
   }
 
+  if (scene.variants?.picker) addVariantPicker(scene.variants);
+
   backBtn.addEventListener('click', () => leave());
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') leave(); });
   window.addEventListener('hashchange', openFromHash);
@@ -81,6 +84,8 @@ function addHotspot(h) {
   btn.slot = `hotspot-${h.id.replace(/[^\w-]/g, '-')}`;
   btn.dataset.position = vec(h.position);
   btn.dataset.normal = vec(h.normal, '');
+  // Pinned to a triangle of the mesh: follows the mesh when it animates.
+  if (h.surface) btn.dataset.surface = h.surface;
   btn.setAttribute('aria-label', h.label);
   const label = document.createElement('span');
   label.className = 'mv-label';
@@ -92,6 +97,32 @@ function addHotspot(h) {
   });
   h.element = btn;
   viewer.append(btn);
+}
+
+// --- Material variants -----------------------------------------------------
+// One button per KHR_materials_variants variant. The model loads with the
+// materials it had in Blender at export time; "current" names the variant
+// that matches them, otherwise an "Original" button is added.
+
+function addVariantPicker({ names, current }) {
+  const buttons = [];
+  const select = (name) => {
+    viewer.variantName = name;
+    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.variant === (name ?? '')));
+  };
+  const options = current ? names : ['', ...names];
+  for (const name of options) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv-variant';
+    b.dataset.variant = name;
+    b.textContent = name || 'Original';
+    b.setAttribute('aria-pressed', String(name === (current ?? '')));
+    b.addEventListener('click', () => select(name || null));
+    buttons.push(b);
+    variantBar.append(b);
+  }
+  variantBar.hidden = false;
 }
 
 // --- Hotspot occlusion ---------------------------------------------------

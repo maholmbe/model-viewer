@@ -6,8 +6,8 @@ UI: 3D Viewport > Sidebar (N) > Model Viewer.
 """
 
 import bpy
-from bpy.props import (BoolProperty, EnumProperty, FloatProperty, IntProperty,
-                       PointerProperty, StringProperty)
+from bpy.props import (BoolProperty, CollectionProperty, EnumProperty, FloatProperty,
+                       IntProperty, PointerProperty, StringProperty)
 
 from . import core
 
@@ -18,6 +18,10 @@ from . import core
 
 def _is_camera(_self, obj):
     return obj.type == "CAMERA"
+
+
+def _is_mesh(_self, obj):
+    return obj.type == "MESH"
 
 
 class MV_HotspotProps(bpy.types.PropertyGroup):
@@ -39,6 +43,23 @@ class MV_HotspotProps(bpy.types.PropertyGroup):
                                   description="Play the animation backwards when leaving (ignored if an exit animation exists)")
     delay: FloatProperty(name="Delay", default=0.0, min=0.0, soft_max=3.0, unit="TIME_ABSOLUTE",
                          description="Seconds to wait for the camera move before the animation starts")
+    stick_to_mesh: BoolProperty(name="Stick to Mesh", default=False,
+                                description="Pin the hotspot to the nearest point on the mesh surface so it "
+                                            "moves along when the mesh is animated")
+    surface_object: PointerProperty(name="Mesh", type=bpy.types.Object, poll=_is_mesh,
+                                    description="Mesh to stick to (default: the parent mesh, "
+                                                "otherwise the nearest mesh)")
+
+
+class MV_VariantMaterial(bpy.types.PropertyGroup):
+    object: PointerProperty(name="Object", type=bpy.types.Object)
+    slot: IntProperty(name="Slot", min=0)
+    material: PointerProperty(name="Material", type=bpy.types.Material)
+
+
+class MV_Variant(bpy.types.PropertyGroup):
+    # "name" (from PropertyGroup) is the variant name shown on the page
+    materials: CollectionProperty(type=MV_VariantMaterial)
 
 
 class MV_SceneSettings(bpy.types.PropertyGroup):
@@ -82,6 +103,13 @@ class MV_SceneSettings(bpy.types.PropertyGroup):
         ("none", "None", "No tone mapping, bright areas clip (like Blender's Standard)"),
     ))
     shadow_intensity: FloatProperty(name="Shadow Intensity", default=1.0, min=0.0, max=2.0)
+
+    export_variants: BoolProperty(name="Export Variants", default=True,
+                                  description="Export the material variants (KHR_materials_variants)")
+    variant_picker: BoolProperty(name="Variant Picker", default=True,
+                                 description="Show buttons on the page to switch between variants")
+    variants: CollectionProperty(type=MV_Variant)
+    active_variant: IntProperty(name="Active Variant", default=0)
 
     viewer_files: EnumProperty(name="Viewer Files", default="IF_MISSING", items=(
         ("IF_MISSING", "Copy if Missing", "Copy index.html/viewer.js/viewer.css only if they don't exist (keeps your edits)"),
@@ -172,6 +200,129 @@ class MV_OT_camera_from_view(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _selected_meshes(context):
+    return [o for o in context.selected_objects if o.type == "MESH" and len(o.material_slots)]
+
+
+def store_materials(variant, objs):
+    """Replace the variant's entries for objs with their current materials."""
+    names = {o.name for o in objs}
+    for i in reversed(range(len(variant.materials))):
+        e = variant.materials[i]
+        if e.object is None or e.object.name in names:
+            variant.materials.remove(i)
+    count = 0
+    for obj in objs:
+        for slot_index, slot in enumerate(obj.material_slots):
+            if slot.material is not None:
+                e = variant.materials.add()
+                e.object, e.slot, e.material = obj, slot_index, slot.material
+                count += 1
+    return count
+
+
+class _VariantOperator:
+    bl_options = {"REGISTER", "UNDO"}
+
+    @staticmethod
+    def active(context):
+        s = context.scene.mv_settings
+        return s.variants[s.active_variant] if 0 <= s.active_variant < len(s.variants) else None
+
+    @classmethod
+    def poll(cls, context):
+        return cls.active(context) is not None
+
+
+class MV_OT_variant_add(bpy.types.Operator):
+    bl_idname = "model_viewer.variant_add"
+    bl_label = "Add Variant"
+    bl_description = "Add a material variant from the current materials of the selected objects"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        s = context.scene.mv_settings
+        names = {v.name for v in s.variants}
+        n = len(s.variants) + 1
+        while "Variant %d" % n in names:
+            n += 1
+        v = s.variants.add()
+        v.name = "Variant %d" % n
+        s.active_variant = len(s.variants) - 1
+        store_materials(v, _selected_meshes(context))
+        return {"FINISHED"}
+
+
+class MV_OT_variant_remove(_VariantOperator, bpy.types.Operator):
+    bl_idname = "model_viewer.variant_remove"
+    bl_label = "Remove Variant"
+    bl_description = "Remove the active material variant (materials are kept)"
+
+    def execute(self, context):
+        s = context.scene.mv_settings
+        s.variants.remove(s.active_variant)
+        s.active_variant = max(0, min(s.active_variant, len(s.variants) - 1))
+        return {"FINISHED"}
+
+
+class MV_OT_variant_move(_VariantOperator, bpy.types.Operator):
+    bl_idname = "model_viewer.variant_move"
+    bl_label = "Move Variant"
+    bl_description = "Change the order of the variants (the order of the buttons on the page)"
+
+    direction: EnumProperty(items=(("UP", "Up", ""), ("DOWN", "Down", "")))
+
+    def execute(self, context):
+        s = context.scene.mv_settings
+        new = s.active_variant + (-1 if self.direction == "UP" else 1)
+        if 0 <= new < len(s.variants):
+            s.variants.move(s.active_variant, new)
+            s.active_variant = new
+        return {"FINISHED"}
+
+
+class MV_OT_variant_store(_VariantOperator, bpy.types.Operator):
+    bl_idname = "model_viewer.variant_store"
+    bl_label = "Store Selected"
+    bl_description = "Store the current materials of the selected objects in the active variant"
+
+    def execute(self, context):
+        objs = _selected_meshes(context)
+        if not objs:
+            self.report({"ERROR"}, "Select the mesh objects whose materials belong to this variant")
+            return {"CANCELLED"}
+        v = self.active(context)
+        count = store_materials(v, objs)
+        self.report({"INFO"}, "%s: stored %d material slot(s)" % (v.name, count))
+        return {"FINISHED"}
+
+
+class MV_OT_variant_apply(_VariantOperator, bpy.types.Operator):
+    bl_idname = "model_viewer.variant_apply"
+    bl_label = "Apply"
+    bl_description = "Assign the active variant's materials in Blender, to preview or edit it"
+
+    def execute(self, context):
+        for e in self.active(context).materials:
+            if e.object is not None and e.slot < len(e.object.material_slots):
+                e.object.material_slots[e.slot].material = e.material
+        return {"FINISHED"}
+
+
+class MV_OT_variant_remove_entry(_VariantOperator, bpy.types.Operator):
+    bl_idname = "model_viewer.variant_remove_entry"
+    bl_label = "Remove Material"
+    bl_description = "Remove this material slot from the variant (it then keeps its default material)"
+
+    index: IntProperty()
+
+    def execute(self, context):
+        v = self.active(context)
+        if 0 <= self.index < len(v.materials):
+            v.materials.remove(self.index)
+        return {"FINISHED"}
+
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
@@ -251,8 +402,11 @@ class MV_PT_hotspot(bpy.types.Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         for prop in ("label", "description", "order", "camera", "action", "exit_action",
-                     "play_mode", "reverse_on_exit", "delay"):
+                     "play_mode", "reverse_on_exit", "delay", "stick_to_mesh"):
             layout.prop(p, prop)
+        row = layout.row()
+        row.active = p.stick_to_mesh
+        row.prop(p, "surface_object")
 
 
 class MV_PT_export_settings(bpy.types.Panel):
@@ -294,15 +448,76 @@ class MV_PT_environment(bpy.types.Panel):
             layout.prop(s, prop)
 
 
+class MV_UL_variants(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_prop, index=0):
+        layout.prop(item, "name", text="", emboss=False, icon="MATERIAL")
+        layout.label(text=str(len(item.materials)))
+
+
+class MV_PT_variants(bpy.types.Panel):
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Model Viewer"
+    bl_label = "Material Variants"
+    bl_parent_id = "MV_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.mv_settings, "export_variants", text="")
+
+    def draw(self, context):
+        s = context.scene.mv_settings
+        layout = self.layout
+        layout.active = s.export_variants
+        layout.prop(s, "variant_picker")
+
+        row = layout.row()
+        row.template_list("MV_UL_variants", "", s, "variants", s, "active_variant", rows=3)
+        col = row.column(align=True)
+        col.operator(MV_OT_variant_add.bl_idname, text="", icon="ADD")
+        col.operator(MV_OT_variant_remove.bl_idname, text="", icon="REMOVE")
+        col.separator()
+        col.operator(MV_OT_variant_move.bl_idname, text="", icon="TRIA_UP").direction = "UP"
+        col.operator(MV_OT_variant_move.bl_idname, text="", icon="TRIA_DOWN").direction = "DOWN"
+
+        if not (0 <= s.active_variant < len(s.variants)):
+            layout.label(text="Select objects, set their materials, then +", icon="INFO")
+            return
+        v = s.variants[s.active_variant]
+        row = layout.row(align=True)
+        row.operator(MV_OT_variant_store.bl_idname, icon="IMPORT")
+        row.operator(MV_OT_variant_apply.bl_idname, icon="HIDE_OFF")
+
+        box = layout.box()
+        if not v.materials:
+            box.label(text="No materials stored", icon="INFO")
+        for i, e in enumerate(v.materials):
+            row = box.row(align=True)
+            obj_name = e.object.name if e.object else "(deleted)"
+            row.label(text="%s · %d" % (obj_name, e.slot + 1), icon="OBJECT_DATA")
+            row.prop(e, "material", text="")
+            row.operator(MV_OT_variant_remove_entry.bl_idname, text="", icon="X", emboss=False).index = i
+
+
 CLASSES = (
     MV_HotspotProps,
+    MV_VariantMaterial,
+    MV_Variant,
     MV_SceneSettings,
     MV_OT_export,
     MV_OT_add_hotspot,
     MV_OT_camera_from_view,
+    MV_OT_variant_add,
+    MV_OT_variant_remove,
+    MV_OT_variant_move,
+    MV_OT_variant_store,
+    MV_OT_variant_apply,
+    MV_OT_variant_remove_entry,
+    MV_UL_variants,
     MV_PT_main,
     MV_PT_scene,
     MV_PT_hotspot,
+    MV_PT_variants,
     MV_PT_export_settings,
     MV_PT_environment,
 )

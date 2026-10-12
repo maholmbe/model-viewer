@@ -85,6 +85,8 @@ def build():
     # Door hinged on the left front edge
     pivot = empty("DoorPivot", (-0.45, -0.315, 0.5))
     door = box("Door", (0.9, 0.03, 0.9), (0, -0.315, 0.5), door_mat, parent=pivot)
+    bevel = door.modifiers.new("Bevel", "BEVEL")
+    bevel.width = 0.01
     box("DoorKnob", (0.05, 0.05, 0.12), (0.35, -0.345, 0.5), metal, parent=door)
 
     # Lid + gadget share one action (two slots) -> one glTF animation
@@ -115,16 +117,31 @@ def build():
     hs_door.mv_hotspot.label = "Door"
     hs_door.mv_hotspot.description = "The door swings open on its left hinge."
     hs_door.mv_hotspot.delay = 0.4
+    hs_door.mv_hotspot.stick_to_mesh = True  # swings with the door
+    hs_door.mv_hotspot.surface_object = door
 
     hs_lid = empty("HS_lid", (0.3, 0.1, 1.04), (0, 0, 0), "SINGLE_ARROW")
     hs_lid.mv_hotspot.label = "Lid"
     hs_lid.mv_hotspot.description = "The lid lifts and the gadget rises out of the box."
     hs_lid.mv_hotspot.order = 1
+    hs_lid.parent = lid  # sticks to its parent mesh
+    hs_lid.matrix_parent_inverse = lid.matrix_world.inverted()
+    hs_lid.mv_hotspot.stick_to_mesh = True
 
     hs_spin = empty("HS_spinner_info", (0.8, -0.38, 0.3), (math.radians(90), 0, 0), "SINGLE_ARROW")
     hs_spin.mv_hotspot.label = "Spinner"
     hs_spin.mv_hotspot.description = "Info-only hotspot: no camera, no animation."
     hs_spin.mv_hotspot.order = 2
+
+    # --- Material variants (door colour) -----------------------------------
+    s = scene.mv_settings
+    for name, mat in (("Blue", door_mat),
+                      ("Red", material("Door Red", (0.6, 0.05, 0.04), roughness=0.35)),
+                      ("Green", material("Door Green", (0.1, 0.35, 0.12), roughness=0.35))):
+        v = s.variants.add()
+        v.name = name
+        e = v.materials.add()
+        e.object, e.slot, e.material = door, 0, mat
 
     # --- Cameras -------------------------------------------------------------
     camera("CAM_home", (2.6, -3.4, 2.0), (0, 0, 0.55), lens=50)
@@ -148,7 +165,6 @@ def build():
     nt.links.new(tex.outputs["Color"], bg.inputs["Color"])
     bg.inputs["Strength"].default_value = 1.0
 
-    s = scene.mv_settings
     s.title = "Demo Cabinet"
     s.alt_text = "A wooden cabinet with a blue door and a lifting lid"
     s.background_toggle = True
@@ -156,8 +172,9 @@ def build():
 
     blend = ROOT / "demo" / "demo_cabinet.blend"
     blend.parent.mkdir(exist_ok=True)
-    s.output_dir = "//../docs/" if not argv else str(SITE) + "/"
+    s.output_dir = "//../docs/"
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))
+    s.output_dir = str(SITE) + "/"  # export target only, not saved
     return scene
 
 
@@ -166,6 +183,8 @@ ctx = core.run_export(bpy.context, bpy.context.scene.mv_settings)
 print("\n=== Export finished:", ctx.out_dir)
 print("animations in GLB:", ctx.data["animations"])
 for h in ctx.data["hotspots"]:
-    print("hotspot", h["id"], "camera:", bool(h["camera"]), "anim:", h["animation"] and h["animation"]["name"])
+    print("hotspot", h["id"], "camera:", bool(h["camera"]), "anim:", h["animation"] and h["animation"]["name"],
+          "surface:", h["surface"])
+print("variants:", ctx.data["variants"])
 for w in ctx.warnings:
     print("WARNING:", w)

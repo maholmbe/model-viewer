@@ -13,6 +13,9 @@ Naming conventions (see README.md for the full description):
 Explicit links set in the add-on panel (Object > Model Viewer Hotspot)
 override the naming convention.
 
+Material variants are defined in the Material Variants panel and exported
+as KHR_materials_variants through the glTF add-on.
+
 The export is split into small "collector" functions that each fill one
 part of the scene.json dict. To add a feature, write a collector and add it
 to COLLECTORS.
@@ -22,15 +25,18 @@ import json
 import math
 import os
 import shutil
-import struct
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import bpy
 import numpy as np
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
-SCHEMA_VERSION = 2
+from .glb import GLB
+
+SCHEMA_VERSION = 3
 
 CAM_PREFIX = "CAM_"
 HOTSPOT_PREFIX = "HS_"
@@ -246,6 +252,7 @@ def collect_hotspots(ctx):
     used_cams = {HOME_ID}
     used_actions = {ANIM_PREFIX + HOME_ID}
     hotspots = []
+    ctx.surface_jobs = []  # resolved against the GLB after export
 
     for hs_id, obj in find_hotspots(ctx.scene):
         p = obj.mv_hotspot
@@ -270,15 +277,19 @@ def collect_hotspots(ctx):
             if exit_action:
                 used_actions.add(exit_action.name)
 
-        hotspots.append({
+        hotspot = {
             "id": hs_id,
             "label": p.label or hs_id.replace("_", " ").capitalize(),
             "description": p.description,
             "position": rounded(pos),
             "normal": rounded(normal),
+            "surface": None,  # model-viewer data-surface, set by attach_surfaces()
             "camera": camera,
             "animation": animation,
-        })
+        }
+        hotspots.append(hotspot)
+        if p.stick_to_mesh:
+            ctx.surface_jobs.append((hotspot, obj, surface_target(ctx, obj), pos))
 
     for cam_id, cam_obj in cams.items():
         if cam_id not in used_cams:
@@ -288,6 +299,17 @@ def collect_hotspots(ctx):
             ctx.warn("Action %s is not linked to any hotspot" % name)
 
     ctx.data["hotspots"] = hotspots
+
+
+def surface_target(ctx, hs_obj):
+    """Mesh object a sticky hotspot attaches to, or None for the nearest mesh."""
+    target = hs_obj.mv_hotspot.surface_object
+    if target is None and hs_obj.parent is not None and hs_obj.parent.type == "MESH":
+        target = hs_obj.parent
+    if target is not None and target not in ctx.export_objs:
+        ctx.warn("%s: %s is not exported, using the nearest mesh instead" % (hs_obj.name, target.name))
+        target = None
+    return target
 
 
 def collect_limits(ctx):
@@ -388,18 +410,170 @@ def collect_environment(ctx):
     ctx.data["environment"] = env
 
 
+def collect_variants(ctx):
+    """Material variants -> scene.json, plus the per-mesh mapping for the GLB.
+
+    Each variant stores (object, slot, material) entries.
+    """
+    s = ctx.settings
+    ctx.variant_names = []
+    ctx.variant_slots = {}  # (object, slot index) -> {material: {variant index}}
+    ctx.data["variants"] = None
+    if not s.export_variants or not s.variants:
+        return
+
+    exported = set(ctx.export_objs)
+    current = None
+    for v in s.variants:
+        name = v.name.strip()
+        if not name or name in ctx.variant_names:
+            ctx.warn("Skipping variant %r: names must be unique and not empty" % v.name)
+            continue
+        vi = len(ctx.variant_names)
+        ctx.variant_names.append(name)
+        matches_scene = len(v.materials) > 0
+        for e in v.materials:
+            obj = e.object
+            if obj is None or obj.type != "MESH" or obj not in exported:
+                continue
+            if e.slot >= len(obj.material_slots) or e.material is None:
+                ctx.warn("Variant %s: %s slot %d no longer exists or has no material" % (name, obj.name, e.slot + 1))
+                continue
+            if obj.material_slots[e.slot].material != e.material:
+                matches_scene = False
+            per_slot = ctx.variant_slots.setdefault((obj, e.slot), {})
+            if not any(vi in users for users in per_slot.values()):
+                per_slot.setdefault(e.material, set()).add(vi)
+        if matches_scene and current is None:
+            current = name
+
+    if not ctx.variant_slots:
+        ctx.warn("Material variants contain no materials of exported objects")
+        ctx.variant_names = []
+        return
+    ctx.data["variants"] = {
+        "names": ctx.variant_names,
+        # Variant whose materials match the scene at export time, i.e. what
+        # the page shows on load (None: the scene's own materials).
+        "current": current,
+        "picker": s.variant_picker,
+    }
+
+
 COLLECTORS = [
     collect_model,
     collect_home,
     collect_hotspots,
     collect_limits,
     collect_environment,
+    collect_variants,
 ]
 
 
 # ---------------------------------------------------------------------------
 # Writers
 # ---------------------------------------------------------------------------
+
+@contextmanager
+def gltf_variants(ctx):
+    """Hand the variants to the glTF exporter for the duration of the export.
+
+    The exporter only writes KHR_materials_variants from its own per-mesh
+    data (shown in its optional "glTF Material Variants" panel). That data
+    is rebuilt from this add-on's variants on every export.
+    """
+    if not ctx.variant_slots:
+        yield
+        return
+    addon = bpy.context.preferences.addons.get("io_scene_gltf2")
+    if addon is None:
+        ctx.warn("glTF add-on not found – material variants are not exported")
+        yield
+        return
+    prefs = addon.preferences
+    was_enabled = prefs.KHR_materials_variants_ui
+    prefs.KHR_materials_variants_ui = True  # registers the exporter's variant properties
+    baked = []
+    try:
+        if ctx.settings.apply_modifiers:
+            baked = bake_modifiers(ctx, {obj for obj, _slot in ctx.variant_slots})
+
+        variants = bpy.data.scenes[0].gltf2_KHR_materials_variants_variants  # the exporter reads scene 0
+        variants.clear()
+        for i, name in enumerate(ctx.variant_names):
+            item = variants.add()
+            item.variant_idx = i  # before the name: glTF's name-uniqueness check uses it
+            item.name = name
+        for mesh in bpy.data.meshes:
+            if mesh.library is None:
+                mesh.gltf2_variant_mesh_data.clear()
+                mesh.gltf2_variant_default_materials.clear()
+
+        # glTF maps variants per mesh and slot: merge objects that share a mesh
+        per_mesh = {}
+        for (obj, slot), per_slot in ctx.variant_slots.items():
+            merged = per_mesh.setdefault((obj.data, slot), {})
+            for mat, users in per_slot.items():
+                for vi in users:
+                    other = next((m for m, u in merged.items() if vi in u), None)
+                    if other is None:
+                        merged.setdefault(mat, set()).add(vi)
+                    elif other != mat:
+                        ctx.warn("Variant %s: objects sharing mesh %s use different materials in slot %d; "
+                                 "glTF can only store one (make the mesh single-user)"
+                                 % (ctx.variant_names[vi], obj.data.name, slot + 1))
+        for (mesh, slot), merged in per_mesh.items():
+            for mat, users in merged.items():
+                item = mesh.gltf2_variant_mesh_data.add()
+                item.material_slot_index = slot
+                item.material = mat
+                for vi in sorted(users):
+                    item.variants.add().variant.variant_idx = vi  # the exporter only reads the index
+        yield
+    finally:
+        bpy.data.scenes[0].gltf2_KHR_materials_variants_variants.clear()
+        for mesh in bpy.data.meshes:
+            if mesh.library is None:
+                mesh.gltf2_variant_mesh_data.clear()
+        restore_modifiers(baked)
+        prefs.KHR_materials_variants_ui = was_enabled
+
+
+def bake_modifiers(ctx, objs):
+    """Temporarily replace the mesh of objs by one with the modifiers applied.
+
+    When applying modifiers, the glTF exporter reads a temporary evaluated
+    mesh that doesn't carry its variant data. Baking the modifiers first
+    makes it read the (baked) mesh itself. restore_modifiers() undoes this.
+    """
+    depsgraph = ctx.context.evaluated_depsgraph_get()
+    baked = []
+    for obj in objs:
+        mods = [m for m in obj.modifiers if m.show_viewport]
+        if not mods:
+            continue
+        if any(m.type == "ARMATURE" and m.object is not None for m in mods):  # keep skinning
+            ctx.warn("%s: material variants on meshes with an Armature modifier and other "
+                     "modifiers are not supported" % obj.name)
+            continue
+        mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph),
+                                               preserve_all_data_layers=True, depsgraph=depsgraph)
+        baked.append((obj, obj.data, [(m, m.show_viewport) for m in mods]))
+        for m in mods:
+            m.show_viewport = False
+        obj.data = mesh
+    return baked
+
+
+def restore_modifiers(baked):
+    for obj, original, mods in baked:
+        mesh = obj.data
+        obj.data = original
+        for m, show in mods:
+            m.show_viewport = show
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+
 
 def write_glb(ctx):
     s = ctx.settings
@@ -412,21 +586,22 @@ def write_glb(ctx):
         for o in ctx.export_objs:
             if o.name in view_layer.objects:
                 o.select_set(True)
-        bpy.ops.export_scene.gltf(
-            filepath=str(ctx.out_dir / s.model_filename),
-            export_format="GLB",
-            use_selection=True,
-            export_apply=s.apply_modifiers,
-            export_yup=True,
-            export_cameras=False,
-            export_lights=False,
-            export_extras=False,
-            export_animations=True,
-            export_animation_mode="ACTIONS",
-            export_merge_animation="ACTION",
-            export_draco_mesh_compression_enable=s.draco,
-            export_image_format=s.image_format,
-        )
+        with gltf_variants(ctx):
+            bpy.ops.export_scene.gltf(
+                filepath=str(ctx.out_dir / s.model_filename),
+                export_format="GLB",
+                use_selection=True,
+                export_apply=s.apply_modifiers,
+                export_yup=True,
+                export_cameras=False,
+                export_lights=False,
+                export_extras=False,
+                export_animations=True,
+                export_animation_mode="ACTIONS",
+                export_merge_animation="ACTION",
+                export_draco_mesh_compression_enable=s.draco,
+                export_image_format=s.image_format,
+            )
     finally:
         for o in view_layer.objects:
             o.select_set(False)
@@ -435,20 +610,8 @@ def write_glb(ctx):
         view_layer.objects.active = prev_active
 
 
-def read_glb_json(path):
-    with open(path, "rb") as f:
-        magic, _version, _length = struct.unpack("<4sII", f.read(12))
-        if magic != b"glTF":
-            raise ValueError("Not a GLB file: %s" % path)
-        chunk_len, chunk_type = struct.unpack("<II", f.read(8))
-        if chunk_type != 0x4E4F534A:  # 'JSON'
-            raise ValueError("First GLB chunk is not JSON")
-        return json.loads(f.read(chunk_len))
-
-
-def verify_animations(ctx):
-    gltf = read_glb_json(ctx.out_dir / ctx.settings.model_filename)
-    names = [a.get("name", "") for a in gltf.get("animations", [])]
+def verify_animations(ctx, glb):
+    names = [a.get("name", "") for a in glb.json.get("animations", [])]
     ctx.data["animations"] = names
     wanted = []
     if ctx.data["home"]["animation"]:
@@ -460,6 +623,105 @@ def verify_animations(ctx):
             if name and name not in names:
                 ctx.warn("Action %s is missing from the GLB – assign it to an object "
                          "(active action or NLA strip)" % name)
+
+
+def verify_variants(ctx, glb):
+    if not ctx.variant_names:
+        return
+    ext = glb.json.get("extensions", {}).get("KHR_materials_variants", {})
+    written = [v.get("name") for v in ext.get("variants", [])]
+    missing = [n for n in ctx.variant_names if n not in written]
+    if missing:
+        ctx.warn("Material variant(s) missing from the GLB: %s" % ", ".join(missing))
+    ctx.data["variants"]["names"] = [n for n in ctx.variant_names if n in written]
+    if not ctx.data["variants"]["names"]:
+        ctx.data["variants"] = None
+
+
+def barycentric(p, a, b, c):
+    v0, v1, v2 = b - a, c - a, p - a
+    d00, d01, d11 = v0.dot(v0), v0.dot(v1), v1.dot(v1)
+    d20, d21 = v2.dot(v0), v2.dot(v1)
+    denom = d00 * d11 - d01 * d01
+    if abs(denom) < 1e-20:
+        return 1.0, 0.0, 0.0
+    v = (d11 * d20 - d01 * d21) / denom
+    w = (d00 * d21 - d01 * d20) / denom
+    bary = [max(0.0, 1.0 - v - w), max(0.0, v), max(0.0, w)]
+    total = sum(bary) or 1.0
+    return tuple(x / total for x in bary)
+
+
+def attach_surfaces(ctx, glb):
+    """Pin "stick to mesh" hotspots to the nearest triangle of the exported mesh.
+
+    model-viewer's data-surface hotspots reference a glTF mesh, primitive,
+    three vertex indices and barycentric weights, and follow the mesh while
+    it animates. The indices refer to the GLB's (possibly Draco-decoded)
+    vertex order, so this runs on the exported file.
+    """
+    if not ctx.surface_jobs:
+        return
+    nodes = glb.json.get("nodes", [])
+    meshes = glb.json.get("meshes", [])
+    world = glb.node_world_matrices()
+    mesh_users = {}
+    for ni in world:
+        if "mesh" in nodes[ni]:
+            mesh_users.setdefault(nodes[ni]["mesh"], []).append(ni)
+
+    trees = {}  # node index -> (BVHTree, [(prim index, local tri, world verts)])
+
+    def node_tree(ni):
+        if ni not in trees:
+            m = np.array(world[ni])
+            verts, tris, info = [], [], []
+            for pi, prim in enumerate(meshes[nodes[ni]["mesh"]]["primitives"]):
+                geom = glb.primitive_geometry(prim)
+                if geom is None:
+                    continue
+                pos, idx = geom
+                wpos = pos @ m[:3, :3].T + m[:3, 3]
+                base = len(verts)
+                verts.extend(map(Vector, wpos))
+                tris.extend((idx + base).tolist())
+                info.extend((pi, tri) for tri in idx.tolist())
+            tree = BVHTree.FromPolygons(verts, tris, all_triangles=True) if tris else None
+            trees[ni] = (tree, verts, tris, info)
+        return trees[ni]
+
+    for hotspot, obj, target, pos in ctx.surface_jobs:
+        candidates = [ni for ni in world if "mesh" in nodes[ni]
+                      and (target is None or nodes[ni].get("name") == target.name)]
+        best = None
+        try:
+            for ni in candidates:
+                tree, verts, tris, info = node_tree(ni)
+                if tree is None:
+                    continue
+                loc, _normal, ti, dist = tree.find_nearest(pos)
+                if loc is not None and (best is None or dist < best[0]):
+                    best = (dist, ni, ti, loc)
+        except RuntimeError as e:  # Draco decoding failed
+            ctx.warn("%s: can't stick to the mesh (%s)" % (obj.name, e))
+            continue
+        if best is None:
+            ctx.warn("%s: no mesh found to stick to" % obj.name)
+            continue
+
+        dist, ni, ti, loc = best
+        _tree, verts, tris, info = trees[ni]
+        prim_index, (a, b, c) = info[ti]
+        u, v, w = barycentric(loc, *(verts[i] for i in tris[ti]))
+        mesh_index = nodes[ni]["mesh"]
+        hotspot["surface"] = "%d %d %d %d %d %.4f %.4f %.4f" % (mesh_index, prim_index, a, b, c, u, v, w)
+        hotspot["position"] = rounded(loc)
+        if dist > ctx.bounds_radius * 0.05:
+            ctx.warn("%s is %.3g m from the surface of %s; it's moved onto the surface"
+                     % (obj.name, dist, nodes[ni].get("name", "the mesh")))
+        if len(mesh_users.get(mesh_index, [])) > 1:
+            ctx.warn("%s: mesh %s is used by several objects; the hotspot may follow another copy "
+                     "(make the mesh single-user)" % (obj.name, nodes[ni].get("name", "")))
 
 
 def write_environment(ctx):
@@ -529,7 +791,10 @@ def run_export(context, settings):
         for collect in COLLECTORS:
             collect(ctx)
         write_glb(ctx)
-        verify_animations(ctx)
+        glb = GLB(ctx.out_dir / settings.model_filename)
+        verify_animations(ctx, glb)
+        verify_variants(ctx, glb)
+        attach_surfaces(ctx, glb)
         write_environment(ctx)
         write_viewer_files(ctx)
         write_json(ctx)

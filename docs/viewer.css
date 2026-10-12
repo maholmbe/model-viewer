@@ -97,5 +97,34 @@ model-viewer.mv-focused .mv-hotspot.mv-active .mv-label { display: none; }
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* Material variant picker */
+.mv-variants {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+.mv-variant {
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 12px;
+  background: var(--mv-panel);
+  color: var(--mv-text);
+  font: inherit;
+  font-size: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+.mv-variant[aria-pressed="true"] { background: var(--mv-accent); color: #fff; }
+
+/* On narrow screens the info panel takes the bottom; move the picker up */
+@media (max-width: 720px) {
+  body:has(.mv-info:not([hidden])) .mv-variants { bottom: auto; top: 60px; }
+}
+
 [hidden] { display: none !important; }
 .mv-bg-toggle[aria-pressed="true"] { background: var(--mv-accent); color: #fff; }
