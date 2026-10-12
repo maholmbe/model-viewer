@@ -27,8 +27,10 @@ async function init() {
   const version = `?v=${scene.generatedAt}`;  // bust caches after a re-export
   viewer.src = scene.model.src + version;
   viewer.alt = scene.model.alt;
-  viewer.environmentImage = env.image === 'neutral' ? 'neutral' : env.image + version;
-  viewer.skyboxImage = env.skybox ? env.image + version : null;
+  // No cache-busting query on the HDR: model-viewer picks its loader from
+  // the file extension and only treats URLs ending in ".hdr" as HDR.
+  viewer.environmentImage = env.image;
+  viewer.skyboxImage = env.skybox ? env.image : null;
   viewer.exposure = env.exposure;
   viewer.toneMapping = env.toneMapping;
   viewer.shadowIntensity = env.shadowIntensity;
@@ -52,7 +54,7 @@ async function init() {
   if (env.backgroundToggle && env.skybox) {
     bgToggle.hidden = false;
     bgToggle.addEventListener('click', () => {
-      viewer.skyboxImage = viewer.skyboxImage ? null : env.image + version;
+      viewer.skyboxImage = viewer.skyboxImage ? null : env.image;
     });
   }
 

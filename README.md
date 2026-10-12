@@ -96,8 +96,10 @@ The site is published at **https://maholmbe.github.io/model-viewer/** and
 updates a minute or two after each push (progress shows in the **Actions**
 tab). HTTPS and the CDN are included. Keep files under 100 MB.
 
-After a re-export, `scene.json` cache-busts the GLB and HDR URLs
-automatically.
+After a re-export, `scene.json` and the GLB are re-fetched automatically.
+The HDR is not cache-busted, because model-viewer only recognises URLs that end
+in `.hdr`. GitHub Pages caches files for about 10 minutes, so a changed HDR
+can take that long to show up (or force-reload with Ctrl+Shift+R).
 
 ## Customising the page
 
