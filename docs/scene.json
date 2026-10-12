@@ -1,7 +1,7 @@
 {
   "version": 2,
   "generator": "Blender 5.2.2 LTS / model_viewer_export",
-  "generatedAt": 1791807888,
+  "generatedAt": 1791808165,
   "title": "Hand drill",
   "model": {
     "src": "hand_drill.glb",
@@ -227,7 +227,7 @@
     "maxFov": 47.52
   },
   "environment": {
-    "lighting": "environment.hdr",
+    "lighting": "neutral",
     "skybox": "environment.hdr",
     "skyboxVisible": true,
     "backgroundToggle": true,
