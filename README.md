@@ -43,6 +43,13 @@ flies to the door close-up and opens the door.
 Anything that isn't `CAM_*` / `HS_*`, a camera or a light, and is visible
 and renderable, goes into the GLB.
 
+### Hotspot visibility
+
+Hotspots are fully opaque. They're hidden when the mesh is between the camera
+and the hotspot, which is checked with a raycast while the camera moves or an
+animation plays. Place the `HS_` empty on or slightly above the surface. If it
+sits inside the mesh, it counts as hidden.
+
 ### Hotspot settings
 
 Select an `HS_` empty to see the **Active Hotspot** panel:
@@ -73,7 +80,9 @@ Select an `HS_` empty to see the **Active Hotspot** panel:
 - Lighting comes from the world's **Environment Texture** (HDR or EXR). It's written as `environment.hdr`, downscaled to *Max HDR Width* (default 2048).
 - Mapping-node **Z rotation** is baked into the image, because model-viewer can't rotate an environment. X/Y rotation is ignored.
 - World **Strength** and Film **Exposure** map to `exposure`. The view transform maps to `tone-mapping` (AgX → agx, Filmic → aces, Standard → none).
-- Toggles: *Export Environment HDR* (off = model-viewer's neutral studio light), *Show as Background* (skybox), *Background Toggle Button* (a button on the page). Film → Transparent gives a transparent background.
+- **Lighting**: *HDR* lights the model with the exported HDR, like Blender. *Neutral Studio* uses model-viewer's bright studio light and keeps the HDR only as the background. That's useful when the HDR is dim, like an indoor scene.
+- **Exposure** is a brightness multiplier on top of the Blender values. **Tone Mapping** can override the Blender mapping; *Neutral* is model-viewer's default for products.
+- Toggles: *Export Environment HDR*, *Show as Background* (whether the background is shown when the page loads) and *Background Toggle Button* (an on/off button on the page). Film → Transparent only affects a plain world colour, not the HDR background.
 - Blender lights are **not** exported. model-viewer lights only with the environment.
 
 ## Workflow

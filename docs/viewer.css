@@ -21,6 +21,10 @@ model-viewer {
   height: 100%;
   background-color: var(--mv-bg);
   --poster-color: transparent;
+  /* Turn off model-viewer's own dimming of hotspots facing away from the
+     camera; viewer.js hides hotspots that are occluded by the mesh instead. */
+  --min-hotspot-opacity: 1;
+  --max-hotspot-opacity: 1;
 }
 
 /* Hotspots */
@@ -34,10 +38,10 @@ model-viewer {
   background: var(--mv-accent);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   cursor: pointer;
-  transition: opacity 0.3s, transform 0.2s;
+  transition: opacity 0.2s, transform 0.2s;
 }
 .mv-hotspot:hover, .mv-hotspot:focus-visible { transform: scale(1.15); }
-.mv-hotspot:not([data-visible]) { opacity: 0.25; }
+.mv-hotspot.mv-occluded { opacity: 0; pointer-events: none; }
 
 .mv-hotspot .mv-label {
   position: absolute;
@@ -94,3 +98,4 @@ model-viewer.mv-focused .mv-hotspot.mv-active .mv-label { display: none; }
 }
 
 [hidden] { display: none !important; }
+.mv-bg-toggle[aria-pressed="true"] { background: var(--mv-accent); color: #fff; }

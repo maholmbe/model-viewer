@@ -29,8 +29,8 @@ async function init() {
   viewer.alt = scene.model.alt;
   // No cache-busting query on the HDR: model-viewer picks its loader from
   // the file extension and only treats URLs ending in ".hdr" as HDR.
-  viewer.environmentImage = env.image;
-  viewer.skyboxImage = env.skybox ? env.image : null;
+  viewer.environmentImage = env.lighting;
+  viewer.skyboxImage = env.skyboxVisible ? env.skybox : null;
   viewer.exposure = env.exposure;
   viewer.toneMapping = env.toneMapping;
   viewer.shadowIntensity = env.shadowIntensity;
@@ -53,8 +53,11 @@ async function init() {
 
   if (env.backgroundToggle && env.skybox) {
     bgToggle.hidden = false;
+    bgToggle.setAttribute('aria-pressed', String(env.skyboxVisible));
     bgToggle.addEventListener('click', () => {
-      viewer.skyboxImage = viewer.skyboxImage ? null : env.image;
+      const show = !viewer.skyboxImage;
+      viewer.skyboxImage = show ? env.skybox : null;
+      bgToggle.setAttribute('aria-pressed', String(show));
     });
   }
 
@@ -65,7 +68,11 @@ async function init() {
   viewer.addEventListener('load', () => {
     if (scene.home.animation) playClip(scene.home.animation.name, { mode: 'loop' });
     openFromHash();
+    requestOcclusion();
   }, { once: true });
+  viewer.addEventListener('camera-change', () => requestOcclusion());
+  viewer.addEventListener('play', () => requestOcclusion());
+  window.addEventListener('resize', () => requestOcclusion());
 }
 
 function addHotspot(h) {
@@ -85,6 +92,61 @@ function addHotspot(h) {
   });
   h.element = btn;
   viewer.append(btn);
+}
+
+// --- Hotspot occlusion ---------------------------------------------------
+// model-viewer only knows whether a hotspot's normal faces the camera. To hide
+// hotspots that are behind other geometry, cast a ray from the camera through
+// each hotspot and check whether the mesh is hit before the hotspot.
+// Runs while the camera moves or an animation plays.
+
+const OCCLUSION_INTERVAL = 100;  // ms between checks
+let occlusionUntil = 0;
+let occlusionTimer = null;
+
+function requestOcclusion(ms = 300) {
+  occlusionUntil = Math.max(occlusionUntil, performance.now() + ms);
+  if (occlusionTimer == null) occlusionTick();
+}
+
+function occlusionTick() {
+  updateOcclusion();
+  if (performance.now() < occlusionUntil || !viewer.paused) {
+    occlusionTimer = setTimeout(occlusionTick, OCCLUSION_INTERVAL);
+  } else {
+    occlusionTimer = null;
+  }
+}
+
+function cameraPosition() {
+  const { theta, phi, radius } = viewer.getCameraOrbit();
+  const t = viewer.getCameraTarget();
+  return {
+    x: t.x + radius * Math.sin(phi) * Math.sin(theta),
+    y: t.y + radius * Math.cos(phi),
+    z: t.z + radius * Math.sin(phi) * Math.cos(theta),
+  };
+}
+
+const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+function updateOcclusion() {
+  if (!viewer.loaded) return;
+  const cam = cameraPosition();
+  const rect = viewer.getBoundingClientRect();
+  // Hotspots sit on the surface, so allow a little slack before the mesh
+  // under the hotspot itself counts as "in front".
+  const tolerance = scene.model.radius * 0.02;
+  for (const h of scene.hotspots) {
+    const q = viewer.queryHotspot(h.element.slot);
+    let occluded = false;
+    if (q) {
+      const hit = viewer.positionAndNormalFromPoint(
+        rect.x + q.canvasPosition.x, rect.y + q.canvasPosition.y);
+      occluded = hit != null && distance(cam, hit.position) < distance(cam, q.position) - tolerance;
+    }
+    h.element.classList.toggle('mv-occluded', occluded);
+  }
 }
 
 function openFromHash() {

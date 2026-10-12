@@ -59,14 +59,28 @@ class MV_SceneSettings(bpy.types.PropertyGroup):
     apply_modifiers: BoolProperty(name="Apply Modifiers", default=True)
 
     export_environment: BoolProperty(name="Export Environment HDR", default=True,
-                                     description="Use the world's Environment Texture for lighting (otherwise neutral studio lighting)")
+                                     description="Export the world's Environment Texture (for lighting and/or background)")
+    lighting: EnumProperty(name="Lighting", default="HDR", items=(
+        ("HDR", "HDR", "Light the model with the exported HDR, like Blender does"),
+        ("NEUTRAL", "Neutral Studio", "Light the model with model-viewer's bright neutral studio light; "
+                                      "the HDR is only used as background"),
+    ))
     show_skybox: BoolProperty(name="Show as Background", default=True,
-                              description="Show the HDR behind the model (skybox)")
+                              description="Show the HDR behind the model (skybox) when the page loads")
     background_toggle: BoolProperty(name="Background Toggle Button", default=False,
                                     description="Add a button to the page to show/hide the HDR background")
     environment_filename: StringProperty(name="HDR File", default="environment.hdr")
     environment_max_width: IntProperty(name="Max HDR Width", default=2048, min=256, max=16384,
                                        description="Downscale larger HDRs to keep the page fast")
+    exposure: FloatProperty(name="Exposure", default=1.0, min=0.0, soft_min=0.1, soft_max=4.0,
+                            description="Brightness multiplier on top of Blender's film exposure and world strength")
+    tone_mapping: EnumProperty(name="Tone Mapping", default="AUTO", items=(
+        ("AUTO", "From Blender", "AgX → agx, Filmic → aces, Khronos PBR Neutral → neutral, Standard → none"),
+        ("neutral", "Neutral", "model-viewer default, keeps product colours accurate"),
+        ("agx", "AgX", "Soft highlight roll-off, like Blender's AgX"),
+        ("aces", "ACES", "Filmic, more contrast"),
+        ("none", "None", "No tone mapping, bright areas clip (like Blender's Standard)"),
+    ))
     shadow_intensity: FloatProperty(name="Shadow Intensity", default=1.0, min=0.0, max=2.0)
 
     viewer_files: EnumProperty(name="Viewer Files", default="IF_MISSING", items=(
@@ -274,9 +288,10 @@ class MV_PT_environment(bpy.types.Panel):
         layout.prop(s, "export_environment")
         col = layout.column()
         col.active = s.export_environment
-        for prop in ("show_skybox", "background_toggle", "environment_filename", "environment_max_width"):
+        for prop in ("lighting", "show_skybox", "background_toggle", "environment_filename", "environment_max_width"):
             col.prop(s, prop)
-        layout.prop(s, "shadow_intensity")
+        for prop in ("exposure", "tone_mapping", "shadow_intensity"):
+            layout.prop(s, prop)
 
 
 CLASSES = (

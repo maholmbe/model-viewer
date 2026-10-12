@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "generator": "Blender 5.2.2 LTS / model_viewer_export",
-  "generatedAt": 1791806592,
+  "generatedAt": 1791807335,
   "title": "Hand drill",
   "model": {
     "src": "hand_drill.glb",
@@ -227,13 +227,14 @@
     "maxFov": 47.52
   },
   "environment": {
-    "image": "environment.hdr",
-    "skybox": false,
+    "lighting": "environment.hdr",
+    "skybox": "environment.hdr",
+    "skyboxVisible": true,
+    "backgroundToggle": true,
     "exposure": 1.0,
     "toneMapping": "none",
     "shadowIntensity": 1.0,
-    "background": null,
-    "backgroundToggle": true
+    "background": null
   },
   "animations": [
     "chuckAction",

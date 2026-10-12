@@ -30,7 +30,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 CAM_PREFIX = "CAM_"
 HOTSPOT_PREFIX = "HS_"
@@ -343,14 +343,16 @@ def collect_environment(ctx):
     s = ctx.settings
     scene = ctx.scene
     view = scene.view_settings
+    tone = s.tone_mapping if s.tone_mapping != "AUTO" else TONE_MAPPING.get(view.view_transform, "neutral")
     env = {
-        "image": "neutral",
-        "skybox": False,
-        "exposure": round(2 ** view.exposure, 4),
-        "toneMapping": TONE_MAPPING.get(view.view_transform, "neutral"),
+        "lighting": "neutral",      # HDR file name or "neutral" (model-viewer studio light)
+        "skybox": None,             # HDR file name used as background, if any
+        "skyboxVisible": False,     # background shown on load
+        "backgroundToggle": False,  # show the background on/off button
+        "exposure": 2 ** view.exposure * s.exposure,
+        "toneMapping": tone,
         "shadowIntensity": s.shadow_intensity,
-        "background": None,
-        "backgroundToggle": s.background_toggle,
+        "background": None,         # CSS colour behind the model
     }
     ctx.env_job = None
 
@@ -359,9 +361,10 @@ def collect_environment(ctx):
         ctx.warn("%d light(s) are not exported – model-viewer lights the model with the environment only" % len(lights))
 
     bg, tex, mapping = find_world_nodes(scene.world)
+    strength = 1.0
     if bg is not None:
         strength = bg.inputs["Strength"].default_value
-        if not bg.inputs["Color"].is_linked:
+        if not bg.inputs["Color"].is_linked and not scene.render.film_transparent:
             env["background"] = linear_to_srgb_hex(bg.inputs["Color"].default_value)
 
     if s.export_environment and tex is not None and tex.image is not None:
@@ -371,15 +374,17 @@ def collect_environment(ctx):
             if abs(rot[0]) > 1e-4 or abs(rot[1]) > 1e-4:
                 ctx.warn("World mapping: only Z rotation is supported (X/Y ignored)")
             rot_z = rot[2] if mapping.vector_type != "TEXTURE" else -rot[2]
-        env["image"] = s.environment_filename
-        env["skybox"] = s.show_skybox and not scene.render.film_transparent
-        env["exposure"] = round(env["exposure"] * strength, 4)
+        if s.lighting == "HDR":
+            env["lighting"] = s.environment_filename
+            env["exposure"] *= strength
+        env["skybox"] = s.environment_filename
+        env["skyboxVisible"] = s.show_skybox
+        env["backgroundToggle"] = s.background_toggle
         ctx.env_job = (tex.image, rot_z)
     elif s.export_environment and bg is not None and tex is None:
         ctx.warn("World has no Environment Texture – using model-viewer's neutral lighting")
 
-    if scene.render.film_transparent:
-        env["background"] = None
+    env["exposure"] = round(env["exposure"], 4)
     ctx.data["environment"] = env
 
 
@@ -464,8 +469,8 @@ def write_environment(ctx):
     w, h = image.size
     if w == 0 or h == 0:
         ctx.warn("Environment image %s could not be loaded" % image.name)
-        ctx.data["environment"]["image"] = "neutral"
-        ctx.data["environment"]["skybox"] = False
+        env = ctx.data["environment"]
+        env.update(lighting="neutral", skybox=None, skyboxVisible=False, backgroundToggle=False)
         return
 
     px = np.empty(w * h * 4, dtype=np.float32)
