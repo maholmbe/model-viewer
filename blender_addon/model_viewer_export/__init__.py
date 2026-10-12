@@ -42,7 +42,7 @@ class MV_HotspotProps(bpy.types.PropertyGroup):
 
 
 class MV_SceneSettings(bpy.types.PropertyGroup):
-    output_dir: StringProperty(name="Output Folder", subtype="DIR_PATH", default="//site/",
+    output_dir: StringProperty(name="Output Folder", subtype="DIR_PATH", default="//docs/",
                                options={"PATH_SUPPORTS_BLEND_RELATIVE"},
                                description="Folder for model.glb, scene.json, the HDR and the viewer files")
     title: StringProperty(name="Title", description="Page title (default: .blend file name)")

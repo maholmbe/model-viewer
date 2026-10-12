@@ -12,7 +12,7 @@ blender_addon/model_viewer_export/   the add-on (Blender 4.4+, tested on 5.2.2)
   templates/                         index.html, viewer.js, viewer.css
 tools/build_demo.py                  builds + exports a demo scene
 demo/demo_cabinet.blend              demo scene (generated)
-site/                                export output = the website (generated)
+docs/                                export output = the website, served by GitHub Pages
 dist/                                installable add-on zip (generated)
 ```
 
@@ -78,23 +78,23 @@ Select an `HS_` empty to see the **Active Hotspot** panel:
 
 ## Workflow
 
-1. Set the **Output Folder** (default `//site/`, next to the .blend).
+1. Set the **Output Folder**. The default is `//docs/` (next to the .blend); for the demo scene it's `//../docs/`, the repo's `docs/` folder.
 2. Click **Export for Model Viewer**. It writes `model.glb`, `scene.json`, `environment.hdr`, and the viewer files if they don't exist yet.
 3. Preview locally. The page has to be served over http; opening the file directly won't work:
    ```sh
-   cd site && python3 -m http.server 8000   # open http://localhost:8000
+   cd docs && python3 -m http.server 8000   # open http://localhost:8000
    ```
-4. Deploy `site/` (see below).
+4. Commit and push `docs/` (see below).
 
 URLs like `…/#door` open a hotspot directly, and the browser's back button
 closes it.
 
 ## Hosting on GitHub Pages
 
-Push the repo, then go to **Settings → Pages** and deploy from a branch. Either
-point it at a `docs/` folder (set the output folder to `//docs/`), or use a
-GitHub Action that publishes `site/`. HTTPS and the CDN are included. Keep
-files under 100 MB.
+In **Settings → Pages**, choose **Deploy from a branch** → `main` → **/docs**.
+The site is published at **https://maholmbe.github.io/model-viewer/** and
+updates a minute or two after each push (progress shows in the **Actions**
+tab). HTTPS and the CDN are included. Keep files under 100 MB.
 
 After a re-export, `scene.json` cache-busts the GLB and HDR URLs
 automatically.
@@ -102,7 +102,7 @@ automatically.
 ## Customising the page
 
 The viewer files are only copied **if missing**, so you can edit
-`site/viewer.css`, `viewer.js` and `index.html` freely. Edit the
+`docs/viewer.css`, `viewer.js` and `index.html` freely. Edit the
 files in `templates/` instead if the change should apply to every future
 project, and set *Viewer Files → Always Overwrite* to refresh them.
 
@@ -132,4 +132,4 @@ blender -b --factory-startup --python tools/build_demo.py
 
 This builds `demo/demo_cabinet.blend` (door, lid + gadget, spinner, three
 hotspots, three cameras, Blender's bundled forest HDRI rotated 45°) and
-exports it to `site/`.
+exports it to `docs/`.

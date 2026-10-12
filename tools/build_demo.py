@@ -1,8 +1,8 @@
 """Build a demo scene that follows the naming conventions and export it.
 
-    blender -b --factory-startup --python tools/build_demo.py -- [site_dir]
+    blender -b --factory-startup --python tools/build_demo.py -- [out_dir]
 
-Writes demo/demo_cabinet.blend and exports to site/ (or site_dir).
+Writes demo/demo_cabinet.blend and exports to docs/ (or out_dir).
 """
 
 import math
@@ -18,7 +18,7 @@ import model_viewer_export  # noqa: E402
 from model_viewer_export import core  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-SITE = Path(argv[0]).resolve() if argv else ROOT / "site"
+SITE = Path(argv[0]).resolve() if argv else ROOT / "docs"
 
 
 def material(name, color, metallic=0.0, roughness=0.5):
@@ -156,7 +156,7 @@ def build():
 
     blend = ROOT / "demo" / "demo_cabinet.blend"
     blend.parent.mkdir(exist_ok=True)
-    s.output_dir = "//../site/" if not argv else str(SITE) + "/"
+    s.output_dir = "//../docs/" if not argv else str(SITE) + "/"
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))
     return scene
 
