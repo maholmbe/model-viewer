@@ -1,0 +1,2 @@
+# Blender backup files (.blend1, .blend2, ...)
+*.blend[1-9]*
