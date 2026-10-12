@@ -1,50 +1,44 @@
 {
   "version": 1,
   "generator": "Blender 5.2.2 LTS / model_viewer_export",
-  "generatedAt": 1791802043,
-  "title": "Demo Cabinet",
+  "generatedAt": 1791806253,
+  "title": "Hand drill",
   "model": {
-    "src": "model.glb",
-    "alt": "A wooden cabinet with a blue door and a lifting lid",
+    "src": "hand_drill.glb",
+    "alt": "Hand drill",
     "center": [
-      0.0,
-      0.51,
-      0.0
+      -0.0003,
+      0.007,
+      0.0015
     ],
-    "radius": 2.1865
+    "radius": 0.2583
   },
   "home": {
     "camera": {
       "source": "CAM_home",
       "target": [
-        -0.0074,
-        0.5459,
-        -0.0097
+        0.0085,
+        0.0178,
+        -0.0079
       ],
       "orbit": [
-        37.405,
-        71.285,
-        4.532
+        37.664,
+        78.797,
+        0.9651
       ],
-      "fov": 22.895
+      "fov": 39.598
     },
-    "animation": {
-      "name": "ANIM_home",
-      "mode": "loop",
-      "reverseOnExit": false,
-      "exit": null,
-      "delay": 0.0
-    }
+    "animation": null
   },
   "hotspots": [
     {
-      "id": "door",
-      "label": "Door",
-      "description": "The door swings open on its left hinge.",
+      "id": "chuck",
+      "label": "Chuck",
+      "description": "Secure your bits",
       "position": [
-        0.2,
-        0.75,
-        0.335
+        0.0,
+        -0.1348,
+        0.0155
       ],
       "normal": [
         0.0,
@@ -52,57 +46,21 @@
         1.0
       ],
       "camera": {
-        "source": "CAM_door",
+        "source": "CAM_chuck",
         "target": [
-          0.096,
-          0.6437,
-          0.4397
+          -0.0007,
+          -0.1572,
+          0.0155
         ],
         "orbit": [
-          34.509,
-          75.559,
-          1.8299
+          0.0,
+          90.0,
+          0.3169
         ],
-        "fov": 28.409
+        "fov": 39.598
       },
       "animation": {
-        "name": "ANIM_door",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.4
-      }
-    },
-    {
-      "id": "lid",
-      "label": "Lid",
-      "description": "The lid lifts and the gadget rises out of the box.",
-      "position": [
-        0.3,
-        1.04,
-        -0.1
-      ],
-      "normal": [
-        0.0,
-        1.0,
-        -0.0
-      ],
-      "camera": {
-        "source": "CAM_lid",
-        "target": [
-          0.0034,
-          1.1539,
-          0.0052
-        ],
-        "orbit": [
-          32.735,
-          57.753,
-          1.9605
-        ],
-        "fov": 25.361
-      },
-      "animation": {
-        "name": "ANIM_lid",
+        "name": "chuckAction",
         "mode": "once",
         "reverseOnExit": true,
         "exit": null,
@@ -110,49 +68,177 @@
       }
     },
     {
-      "id": "spinner_info",
-      "label": "Spinner",
-      "description": "Info-only hotspot: no camera, no animation.",
+      "id": "crank",
+      "label": "Crank",
+      "description": "Efficient power delivery",
       "position": [
-        0.8,
-        0.3,
-        0.38
+        0.0,
+        0.0861,
+        0.0279
       ],
       "normal": [
         0.0,
         -0.0,
         1.0
       ],
-      "camera": null,
-      "animation": null
+      "camera": {
+        "source": "CAM_crank",
+        "target": [
+          0.0061,
+          0.0124,
+          0.038
+        ],
+        "orbit": [
+          -48.344,
+          88.351,
+          0.4884
+        ],
+        "fov": 39.598
+      },
+      "animation": {
+        "name": "crankAction",
+        "mode": "once",
+        "reverseOnExit": true,
+        "exit": null,
+        "delay": 0.0
+      }
+    },
+    {
+      "id": "drillbit",
+      "label": "Drill bit",
+      "description": "Holes in the making",
+      "position": [
+        0.0034,
+        -0.1992,
+        -0.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        -0.0
+      ],
+      "camera": {
+        "source": "CAM_drillbit",
+        "target": [
+          -0.0007,
+          -0.2587,
+          0.0
+        ],
+        "orbit": [
+          0.0,
+          90.0,
+          0.3325
+        ],
+        "fov": 39.598
+      },
+      "animation": {
+        "name": "chuckAction",
+        "mode": "once",
+        "reverseOnExit": true,
+        "exit": null,
+        "delay": 0.0
+      }
+    },
+    {
+      "id": "handle",
+      "label": "Wooden handle",
+      "description": "Never slip your grip",
+      "position": [
+        0.0,
+        0.2498,
+        -0.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        -0.0
+      ],
+      "camera": {
+        "source": "CAM_handle",
+        "target": [
+          0.0021,
+          0.2272,
+          0.0029
+        ],
+        "orbit": [
+          51.452,
+          81.362,
+          0.5156
+        ],
+        "fov": 39.598
+      },
+      "animation": {
+        "name": "wooden_handleAction",
+        "mode": "once",
+        "reverseOnExit": true,
+        "exit": null,
+        "delay": 0.0
+      }
+    },
+    {
+      "id": "knob",
+      "label": "Wooden knob",
+      "description": "For people with three hands",
+      "position": [
+        0.0,
+        0.0,
+        -0.061
+      ],
+      "normal": [
+        -0.0,
+        -0.0,
+        -1.0
+      ],
+      "camera": {
+        "source": "CAM_knob",
+        "target": [
+          -0.011,
+          0.0069,
+          -0.0818
+        ],
+        "orbit": [
+          115.492,
+          82.099,
+          0.3422
+        ],
+        "fov": 39.598
+      },
+      "animation": {
+        "name": "wooden_knobAction",
+        "mode": "once",
+        "reverseOnExit": true,
+        "exit": null,
+        "delay": 0.0
+      }
     }
   ],
   "limits": {
     "minOrbit": [
       "auto",
       22.5,
-      0.915
+      0.1585
     ],
     "maxOrbit": [
       "auto",
       157.5,
-      8.7461
+      1.4476
     ],
     "minFov": 12.0,
-    "maxFov": 45.0
+    "maxFov": 47.52
   },
   "environment": {
     "image": "environment.hdr",
-    "skybox": true,
+    "skybox": false,
     "exposure": 1.0,
-    "toneMapping": "agx",
+    "toneMapping": "none",
     "shadowIntensity": 1.0,
     "background": null,
     "backgroundToggle": true
   },
   "animations": [
-    "ANIM_door",
-    "ANIM_lid",
-    "ANIM_home"
+    "chuckAction",
+    "crankAction",
+    "wooden_handleAction",
+    "wooden_knobAction"
   ]
 }
