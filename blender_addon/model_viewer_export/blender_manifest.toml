@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+
+id = "model_viewer_export"
+version = "0.1.0"
+name = "Model Viewer Export"
+tagline = "Export GLB, cameras, hotspots and HDR for Google model-viewer"
+maintainer = "Mats Holmberg"
+type = "add-on"
+
+blender_version_min = "4.4.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Write GLB, HDR and JSON files to the chosen output folder"

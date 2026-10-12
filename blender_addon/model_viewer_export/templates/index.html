@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model Viewer</title>
+  <link rel="stylesheet" href="viewer.css">
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js"></script>
+  <script type="module" src="viewer.js"></script>
+</head>
+<body>
+  <!-- viewer.js fills this in from scene.json -->
+  <model-viewer id="viewer" camera-controls touch-action="pan-y" interpolation-decay="120"
+                animation-crossfade-duration="400" interaction-prompt="none">
+  </model-viewer>
+
+  <aside id="info" class="mv-info" hidden>
+    <button id="back" class="mv-back" type="button">← Back</button>
+    <h2 id="info-title"></h2>
+    <p id="info-text"></p>
+  </aside>
+
+  <button id="bg-toggle" class="mv-bg-toggle" type="button" hidden>Background</button>
+</body>
+</html>

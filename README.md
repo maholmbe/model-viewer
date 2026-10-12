@@ -1,0 +1,135 @@
+# Blender → model-viewer pipeline
+
+A Blender add-on that exports a scene to a static web page built on
+[Google model-viewer](https://modelviewer.dev): a rotatable model, hotspots
+that open close-up camera views, and animations that play when a hotspot is
+clicked.
+
+```
+blender_addon/model_viewer_export/   the add-on (Blender 4.4+, tested on 5.2.2)
+  core.py                            scene collection + export logic
+  __init__.py                        properties, operators, sidebar UI
+  templates/                         index.html, viewer.js, viewer.css
+tools/build_demo.py                  builds + exports a demo scene
+demo/demo_cabinet.blend              demo scene (generated)
+site/                                export output = the website (generated)
+dist/                                installable add-on zip (generated)
+```
+
+## Install
+
+Build the zip, then in Blender go to **Edit → Preferences → Get Extensions → ⌄ → Install from Disk** and pick it:
+
+```sh
+blender --command extension build --source-dir blender_addon/model_viewer_export --output-dir dist
+```
+
+The panel appears under **3D Viewport → Sidebar (N) → Model Viewer**.
+
+## Naming conventions
+
+| Blender object | Name | Meaning |
+|---|---|---|
+| Camera | `CAM_home` | Start / overview view. The **Back** button returns here. |
+| Camera | `CAM_<id>` | Close-up view for hotspot `<id>` |
+| Empty | `HS_<id>` | Hotspot. Its position is the hotspot location and its **local +Z** is the surface normal (use the *Single Arrow* display type) |
+| Action | `ANIM_<id>` | Plays when hotspot `<id>` is clicked |
+| Action | `ANIM_<id>_exit` | *(optional)* Plays when leaving the hotspot. Without it, `ANIM_<id>` plays in reverse. |
+| Action | `ANIM_home` | *(optional)* Loops while in the overview |
+
+Example: `HS_door` + `CAM_door` + `ANIM_door` gives a "Door" hotspot that
+flies to the door close-up and opens the door.
+
+Anything that isn't `CAM_*` / `HS_*`, a camera or a light, and is visible
+and renderable, goes into the GLB.
+
+### Hotspot settings
+
+Select an `HS_` empty to see the **Active Hotspot** panel:
+
+- **Label / Description**: hotspot label and the text in the info panel
+- **Order**: sort order
+- **Camera / Animation / Exit Animation**: explicit links that override the naming convention, for example to reuse one camera for two hotspots
+- **Play**: Once (holds the last frame), Loop, or Ping-pong
+- **Reverse on Exit**: play backwards when leaving (Once only)
+- **Delay**: seconds to wait for the camera move before the animation starts
+
+### Animations
+
+- Each action has to be **assigned to the object it animates**, either as the active action or as a strip on an NLA track. Actions that aren't assigned don't get exported. The add-on reads the GLB back after export and warns about any that are missing.
+- To animate **several objects** from one hotspot, assign the same action to all of them. Blender 4.4+ gives each object its own *slot* and the exporter merges them into one glTF animation. In the demo, `ANIM_lid` moves both `Lid` and `Gadget`.
+- The model shows the pose at the **scene start frame** when no animation is playing. The export always runs at `frame_start`.
+- model-viewer plays one animation at a time. Opening hotspot B while A is open cross-fades A back to its rest pose.
+
+### Cameras
+
+- Position, direction and focal length are exported exactly. model-viewer always orbits around a target point. The add-on puts that target at the point on the camera's view axis nearest the hotspot, so the user can rotate around the detail after the close-up.
+- Camera roll and lens shift aren't supported by model-viewer.
+- **Hotspot Camera from View** in the panel creates or updates `CAM_<id>` for the selected hotspot from the current viewport position. **Home Camera from View** does the same for `CAM_home`.
+- Camera orbit and zoom limits are widened automatically so close-ups aren't clamped.
+
+### Environment / lighting
+
+- Lighting comes from the world's **Environment Texture** (HDR or EXR). It's written as `environment.hdr`, downscaled to *Max HDR Width* (default 2048).
+- Mapping-node **Z rotation** is baked into the image, because model-viewer can't rotate an environment. X/Y rotation is ignored.
+- World **Strength** and Film **Exposure** map to `exposure`. The view transform maps to `tone-mapping` (AgX → agx, Filmic → aces, Standard → none).
+- Toggles: *Export Environment HDR* (off = model-viewer's neutral studio light), *Show as Background* (skybox), *Background Toggle Button* (a button on the page). Film → Transparent gives a transparent background.
+- Blender lights are **not** exported. model-viewer lights only with the environment.
+
+## Workflow
+
+1. Set the **Output Folder** (default `//site/`, next to the .blend).
+2. Click **Export for Model Viewer**. It writes `model.glb`, `scene.json`, `environment.hdr`, and the viewer files if they don't exist yet.
+3. Preview locally. The page has to be served over http; opening the file directly won't work:
+   ```sh
+   cd site && python3 -m http.server 8000   # open http://localhost:8000
+   ```
+4. Deploy `site/` (see below).
+
+URLs like `…/#door` open a hotspot directly, and the browser's back button
+closes it.
+
+## Hosting on GitHub Pages
+
+Push the repo, then go to **Settings → Pages** and deploy from a branch. Either
+point it at a `docs/` folder (set the output folder to `//docs/`), or use a
+GitHub Action that publishes `site/`. HTTPS and the CDN are included. Keep
+files under 100 MB.
+
+After a re-export, `scene.json` cache-busts the GLB and HDR URLs
+automatically.
+
+## Customising the page
+
+The viewer files are only copied **if missing**, so you can edit
+`site/viewer.css`, `viewer.js` and `index.html` freely. Edit the
+files in `templates/` instead if the change should apply to every future
+project, and set *Viewer Files → Always Overwrite* to refresh them.
+
+## Extending
+
+`scene.json` is the contract between Blender and the page (it has a
+`version` field). To add a feature:
+
+1. Write a `collect_<thing>(ctx)` function in `core.py` that adds data to `ctx.data` (and `ctx.warn(...)` for problems), then add it to `COLLECTORS`.
+2. Read the new data in `viewer.js`.
+
+Ideas that fit this structure:
+
+- Hotspots that follow animated parts (model-viewer `data-surface` hotspots)
+- Several animations at once (`appendAnimation` / `detachAnimation`)
+- Material/colour variants (`KHR_materials_variants` + a variant picker)
+- AR button (`ar ar-modes="webxr scene-viewer quick-look"`)
+- Guided tour: step through hotspots in `order` with next/prev buttons
+- Multiple languages for labels and descriptions
+- Poster image rendered from `CAM_home` for faster first paint
+
+## Demo
+
+```sh
+blender -b --factory-startup --python tools/build_demo.py
+```
+
+This builds `demo/demo_cabinet.blend` (door, lid + gadget, spinner, three
+hotspots, three cameras, Blender's bundled forest HDRI rotated 45°) and
+exports it to `site/`.
