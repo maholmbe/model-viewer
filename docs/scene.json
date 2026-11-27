@@ -1,7 +1,7 @@
 {
   "version": 3,
   "generator": "Blender 5.3.0 / model_viewer_export",
-  "generatedAt": 1795771440,
+  "generatedAt": 1795774345,
   "title": "container",
   "model": {
     "src": "model.glb",
@@ -33,15 +33,19 @@
     "maxFov": 45.0
   },
   "environment": {
-    "lighting": "neutral",
-    "skybox": null,
+    "lighting": "environment.hdr",
+    "skybox": "environment.hdr",
     "skyboxVisible": false,
     "backgroundToggle": false,
     "exposure": 1.0,
     "toneMapping": "agx",
     "shadowIntensity": 1.0,
-    "background": "#404040"
+    "background": null
   },
   "variants": null,
-  "animations": []
+  "animations": [
+    "doors",
+    "loadout1",
+    "loadout2"
+  ]
 }
