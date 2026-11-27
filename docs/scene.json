@@ -1,17 +1,17 @@
 {
   "version": 4,
   "generator": "Blender 5.3.0 / model_viewer_export",
-  "generatedAt": 1795778338,
+  "generatedAt": 1795779216,
   "title": "container",
   "model": {
     "src": "model.glb",
     "alt": "container",
     "center": [
-      0.0233,
+      0.0278,
       1.2766,
-      -0.1875
+      0.0565
     ],
-    "radius": 3.5976
+    "radius": 4.3401
   },
   "home": {
     "camera": null,
@@ -22,19 +22,24 @@
     "mode": "once",
     "clips": [
       {
-        "name": "doors",
-        "label": "Doors",
+        "name": "doors_close",
+        "label": "Doors close",
+        "duration": 2
+      },
+      {
+        "name": "doors_open",
+        "label": "Doors open",
         "duration": 2
       },
       {
         "name": "loadout1",
         "label": "Loadout1",
-        "duration": 0.25
+        "duration": 0.5
       },
       {
         "name": "loadout2",
         "label": "Loadout2",
-        "duration": 0.25
+        "duration": 0.5
       }
     ]
   },
@@ -42,12 +47,12 @@
     "minOrbit": [
       "auto",
       22.5,
-      3.5976
+      4.3401
     ],
     "maxOrbit": [
       "auto",
       157.5,
-      14.3905
+      17.3606
     ],
     "minFov": 12.0,
     "maxFov": 45.0
@@ -64,7 +69,8 @@
   },
   "variants": null,
   "animations": [
-    "doors",
+    "doors_close",
+    "doors_open",
     "loadout1",
     "loadout2"
   ]
