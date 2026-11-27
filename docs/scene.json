@@ -1,7 +1,7 @@
 {
   "version": 3,
   "generator": "Blender 5.3.0 / model_viewer_export",
-  "generatedAt": 1795774569,
+  "generatedAt": 1795774706,
   "title": "container",
   "model": {
     "src": "model.glb",
@@ -38,7 +38,7 @@
     "skyboxVisible": true,
     "backgroundToggle": true,
     "exposure": 1.0,
-    "toneMapping": "agx",
+    "toneMapping": "neutral",
     "shadowIntensity": 1.0,
     "background": null
   },
