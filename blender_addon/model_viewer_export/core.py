@@ -264,6 +264,11 @@ def collect_model(ctx):
     }
     if not ctx.export_objs:
         ctx.warn("No visible objects to export")
+    exported = set(ctx.export_objs)
+    for obj in ctx.export_objs:
+        if any(c in exported for c in obj.children) and min(map(abs, obj.matrix_world.to_scale())) < 1e-6:
+            ctx.warn("%s has scale 0 at the start frame, so the glTF export gives its children scale 0 too "
+                     "and they never show up. Use a tiny scale such as 0.001 instead of 0" % obj.name)
 
 
 def collect_home(ctx):
@@ -680,6 +685,7 @@ def verify_animations(ctx, glb):
                          "(active action or NLA strip)" % name)
     player = ctx.data["player"]
     if player:
+        warn_shared_targets(ctx, glb, [c["name"] for c in player["clips"]])
         for clip in player["clips"]:
             if clip["name"] not in names:
                 ctx.warn("Action %s is missing from the GLB – assign it to an object (active action "
@@ -687,6 +693,29 @@ def verify_animations(ctx, glb):
         player["clips"] = [dict(c, duration=durations[c["name"]]) for c in player["clips"] if c["name"] in names]
         if not player["clips"]:
             ctx.data["player"] = None
+
+
+def warn_shared_targets(ctx, glb, clip_names):
+    """The player layers its clips, so two clips moving the same thing get blended."""
+    nodes = glb.json.get("nodes", [])
+    users = {}  # (node, path) -> [clip names]
+    for anim in glb.json.get("animations", []):
+        if anim.get("name") in clip_names:
+            for ch in anim.get("channels", []):
+                t = ch.get("target", {})
+                if "node" in t:
+                    names = users.setdefault((t["node"], t.get("path")), [])
+                    if anim["name"] not in names:
+                        names.append(anim["name"])
+    reported = set()
+    for (node, path), names in users.items():
+        if len(names) > 1 and tuple(names) not in reported:
+            reported.add(tuple(names))
+            ctx.warn("Animation player: %s %s animate %s (%s); the page blends them, e.g. a door then "
+                     "closes only halfway. Give each moving part one animation (its button plays it back on "
+                     "the second press) or untick the others in the Animation Player panel"
+                     % (" and ".join(names), "both" if len(names) == 2 else "all",
+                        nodes[node].get("name", "a node"), path))
 
 
 def verify_variants(ctx, glb):
