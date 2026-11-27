@@ -151,7 +151,7 @@ model-viewer.mv-focused .mv-hotspot.mv-active .mv-label { display: none; }
 .mv-play .mv-icon-pause, .mv-play.mv-playing .mv-icon-play { display: none; }
 .mv-play.mv-playing .mv-icon-pause { display: inline; }
 .mv-scrub { flex: 1; min-width: 0; accent-color: var(--mv-accent); }
-.mv-loop, .mv-clip {
+.mv-loop, .mv-reset, .mv-clip {
   border: 0;
   border-radius: 6px;
   padding: 5px 10px;
@@ -162,6 +162,8 @@ model-viewer.mv-focused .mv-hotspot.mv-active .mv-label { display: none; }
   cursor: pointer;
 }
 .mv-loop[aria-pressed="true"], .mv-clip[aria-pressed="true"] { background: var(--mv-accent); color: #fff; }
+/* Clip that isn't at its start pose (e.g. an opened door) */
+.mv-clip.mv-moved:not([aria-pressed="true"]) { box-shadow: inset 0 0 0 2px var(--mv-accent); }
 .mv-clips { display: flex; flex-wrap: wrap; gap: 6px; }
 .mv-clips:empty { display: none; }
 

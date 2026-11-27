@@ -654,8 +654,19 @@ def write_glb(ctx):
         view_layer.objects.active = prev_active
 
 
+def animation_durations(glb):
+    """{animation name: length in seconds} (the glTF clip runs from 0 to its last key)."""
+    accessors = glb.json.get("accessors", [])
+    durations = {}
+    for anim in glb.json.get("animations", []):
+        ends = [accessors[s["input"]].get("max", [0])[0] for s in anim.get("samplers", [])]
+        durations[anim.get("name", "")] = round(max(ends, default=0.0), 4)
+    return durations
+
+
 def verify_animations(ctx, glb):
-    names = [a.get("name", "") for a in glb.json.get("animations", [])]
+    durations = animation_durations(glb)
+    names = list(durations)
     ctx.data["animations"] = names
     wanted = []
     if ctx.data["home"]["animation"]:
@@ -673,7 +684,7 @@ def verify_animations(ctx, glb):
             if clip["name"] not in names:
                 ctx.warn("Action %s is missing from the GLB – assign it to an object (active action "
                          "or NLA strip) or untick it in the Animation Player panel" % clip["name"])
-        player["clips"] = [c for c in player["clips"] if c["name"] in names]
+        player["clips"] = [dict(c, duration=durations[c["name"]]) for c in player["clips"] if c["name"] in names]
         if not player["clips"]:
             ctx.data["player"] = None
 

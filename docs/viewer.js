@@ -14,6 +14,7 @@ const playBtn = document.querySelector('#play');
 const scrub = document.querySelector('#scrub');
 const loopBtn = document.querySelector('#loop');
 const clipBar = document.querySelector('#clips');
+const resetBtn = document.querySelector('#reset');
 
 const vec = (v, unit = 'm') => v.map((c) => `${c}${unit}`).join(' ');
 const orbit = ([theta, phi, radius]) => `${theta}deg ${phi}deg ${radius}m`;
@@ -77,6 +78,7 @@ async function init() {
 
   viewer.addEventListener('load', () => {
     if (scene.home.animation) playClip(scene.home.animation.name, { mode: 'loop' });
+    if (player) playerBar.hidden = false;
     openFromHash();
     requestOcclusion();
   }, { once: true });
@@ -133,98 +135,178 @@ function addVariantPicker({ names, current }) {
 }
 
 // --- Animation player -----------------------------------------------------
-// Play/pause, a timeline, a loop toggle and one button per clip. Hidden while
-// a hotspot is open; hotspot and home animations take over the model then.
+// One button per clip, plus play/pause, a timeline, a loop toggle and reset.
+// Clips are layered with appendAnimation(), so each one keeps its own pose:
+// open the doors, then run a loadout, and the doors stay open.
+// Each layer is frozen (timeScale 0) and its time is driven from here, which
+// gives per-clip reverse, scrubbing and pausing.
+// Hidden while a hotspot is open; hotspot and home animations use the
+// regular single-animation playback (animationName / play()).
 
-let player = null;  // { clips, clip: selected clip name or null, loop, pingpong, playing }
+const EPS = 1e-3;
+let player = null;
 
 function addPlayer({ clips, mode }) {
-  player = { clips, clip: null, loop: mode !== 'once', pingpong: mode === 'pingpong', playing: false };
+  player = {
+    clips: clips.map((c) => ({
+      ...c, duration: c.duration || 0, time: 0, dir: 1, playing: false, faded: false, button: null,
+    })),
+    selected: null,
+    loop: mode !== 'once',
+    pingpong: mode === 'pingpong',
+    awakeUntil: 0,  // keep model-viewer rendering until then (ms)
+    awake: false,
+  };
   loopBtn.setAttribute('aria-pressed', String(player.loop));
 
-  if (clips.length > 1) {
-    for (const c of clips) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'mv-clip';
-      b.dataset.clip = c.name;
-      b.textContent = c.label;
-      b.setAttribute('aria-pressed', 'false');
-      b.addEventListener('click', () => selectClip(c.name));
-      clipBar.append(b);
-    }
-  } else {
-    playBtn.setAttribute('aria-label', `Play ${clips[0].label}`);
+  for (const c of player.clips) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv-clip';
+    b.textContent = c.label;
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => clickClip(c));
+    c.button = b;
+    clipBar.append(b);
   }
 
   playBtn.addEventListener('click', () => {
-    if (!player.clip) selectClip(clips[0].name);
-    else if (player.playing) viewer.pause();
-    else resumeClip();
+    const c = player.selected ?? player.clips[0];
+    select(c);
+    if (c.playing) c.playing = false;
+    else {
+      if (!player.loop && c.time >= c.duration - EPS) c.time = 0;  // replay from the start
+      if (!player.loop) c.dir = 1;
+      start(c);
+    }
+    updatePlayerUI();
   });
   loopBtn.addEventListener('click', () => {
     player.loop = !player.loop;
     loopBtn.setAttribute('aria-pressed', String(player.loop));
-    if (player.clip && player.playing) resumeClip();  // apply the new mode
   });
+  resetBtn.addEventListener('click', () => resetPlayer());
   scrub.addEventListener('input', () => {
-    viewer.pause();
-    viewer.currentTime = Number(scrub.value) * viewer.duration;
-    requestOcclusion();
+    const c = player.selected;
+    if (!c) return;
+    c.playing = false;
+    c.time = Number(scrub.value) * c.duration;
+    applyTime(c);
+    updatePlayerUI();
   });
 
-  viewer.addEventListener('play', () => setPlaying(player.clip != null && viewer.animationName === player.clip));
-  viewer.addEventListener('pause', () => setPlaying(false));
-  viewer.addEventListener('finished', () => setPlaying(false));
-
-  const tick = () => {
-    if (player.playing && viewer.duration > 0) {
-      const t = viewer.currentTime % viewer.duration;
-      scrub.value = String((t < 0 ? t + viewer.duration : t) / viewer.duration);
+  let last = performance.now();
+  const tick = (now) => {
+    const dt = Math.min((now - last) / 1000, 0.1);  // no jump after a hidden tab
+    last = now;
+    let playing = false;
+    for (const c of player.clips) {
+      if (!c.playing) continue;
+      advance(c, dt);
+      applyTime(c);
+      playing = true;
     }
+    if (playing) updatePlayerUI();
+    else if (player.awake && now > player.awakeUntil) sleep();
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-
-  playerBar.hidden = false;
+  // shown once the model has loaded (see init)
 }
 
-const playerMode = () => (player.loop ? (player.pingpong ? 'pingpong' : 'loop') : 'once');
+// Clip button: with Loop off it plays the clip to its end, and the next press
+// plays it back (open / close). With Loop on it starts / pauses the loop.
+function clickClip(c) {
+  select(c);
+  if (player.loop) {
+    if (c.playing) c.playing = false;
+    else start(c);
+  } else if (c.playing) {
+    c.dir = -c.dir;
+  } else {
+    if (c.time >= c.duration - EPS) c.dir = -1;
+    else if (c.time <= EPS) c.dir = 1;
+    start(c);
+  }
+  updatePlayerUI();
+}
 
-function setPlaying(playing) {
-  player.playing = playing;
+function start(c) {
+  token++;  // cancel pending hotspot/home callbacks
+  c.playing = true;
+}
+
+function advance(c, dt) {
+  if (c.duration <= 0) { c.playing = false; return; }
+  c.time += c.dir * dt;
+  if (c.time > 0 && c.time < c.duration) return;
+  if (!player.loop) {
+    c.time = Math.min(Math.max(c.time, 0), c.duration);
+    c.playing = false;
+  } else if (player.pingpong) {
+    c.time = c.time >= c.duration ? 2 * c.duration - c.time : -c.time;
+    c.dir = -c.dir;
+  } else {
+    c.time = ((c.time % c.duration) + c.duration) % c.duration;
+  }
+}
+
+// Show clip c at c.time, layered on top of the other clips.
+function applyTime(c) {
+  // model-viewer restarts a stopped layer that sits exactly on its last frame,
+  // so stay a hair before it.
+  const time = Math.max(0, Math.min(c.time, c.duration - EPS));
+  // After a reset the layer is still fading out; fading in replaces that.
+  viewer.appendAnimation(c.name, { time, timeScale: 0, weight: 1, fade: c.faded ? 0.2 : false });
+  c.faded = false;
+  wake(200);
+}
+
+// Keep rendering for a moment so the new pose (or a fade) shows up.
+function wake(ms) {
+  player.awake = true;
+  player.awakeUntil = Math.max(player.awakeUntil, performance.now() + ms);
+  requestOcclusion(ms);
+}
+
+// Nothing is moving: stop model-viewer's render loop (the poses stay as they
+// are). A looping ANIM_home keeps it running.
+function sleep() {
+  player.awake = false;
+  if (!scene.home.animation && !active) viewer.pause();
+}
+
+function select(c) {
+  player.selected = c;
+  scrub.disabled = c.duration <= 0;
+}
+
+function updatePlayerUI() {
+  const sel = player.selected;
+  for (const c of player.clips) {
+    c.button.setAttribute('aria-pressed', String(c === sel));
+    c.button.classList.toggle('mv-moved', c.time > EPS);
+  }
+  const playing = !!sel?.playing;
   playBtn.classList.toggle('mv-playing', playing);
   playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  scrub.value = sel && sel.duration > 0 ? String(sel.time / sel.duration) : '0';
 }
 
-// Start a clip from the beginning.
-async function selectClip(name) {
-  token++;  // cancel pending hotspot/home callbacks
-  player.clip = name;
-  for (const b of clipBar.children) b.setAttribute('aria-pressed', String(b.dataset.clip === name));
-  scrub.disabled = false;
-  await playClip(name, { mode: playerMode() });
-  viewer.currentTime = 0;
-  setPlaying(true);
-}
-
-// Continue the selected clip where it is (from the start if it has ended).
-async function resumeClip() {
-  token++;
-  let t = viewer.currentTime;
-  if (!player.loop && viewer.duration - t < 0.05) t = 0;
-  await playClip(player.clip, { mode: playerMode() });
-  viewer.currentTime = t;
-  setPlaying(true);
-}
-
+// Fade every clip back to its start pose.
 function resetPlayer() {
   if (!player) return;
-  player.clip = null;
-  setPlaying(false);
-  for (const b of clipBar.children) b.setAttribute('aria-pressed', 'false');
-  scrub.value = '0';
-  scrub.disabled = true;
+  for (const c of player.clips) {
+    if (c.time > EPS || c.playing) {
+      viewer.detachAnimation(c.name, { fade: 0.4 });
+      c.faded = true;
+    }
+    c.playing = false;
+    c.time = 0;
+    c.dir = 1;
+  }
+  wake(600);
+  updatePlayerUI();
 }
 
 // --- Hotspot occlusion ---------------------------------------------------

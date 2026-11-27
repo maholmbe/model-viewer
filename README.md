@@ -82,20 +82,27 @@ moves, rotates or deforms (skinned meshes work too).
 - Each action has to be **assigned to the object it animates**, either as the active action or as a strip on an NLA track. Actions that aren't assigned don't get exported. The add-on reads the GLB back after export and warns about any that are missing.
 - To animate **several objects** from one hotspot, assign the same action to all of them. Blender 4.4+ gives each object its own *slot* and the exporter merges them into one glTF animation. In the demo, `ANIM_lid` moves both `Lid` and `Gadget`.
 - The model shows the pose at the **scene start frame** when no animation is playing. The export always runs at `frame_start`.
-- model-viewer plays one animation at a time. Opening hotspot B while A is open cross-fades A back to its rest pose.
+- Hotspot animations play one at a time. Opening hotspot B while A is open cross-fades A back to its rest pose. (The animation player can layer several, see below.)
 
 ### Animation player
 
 Panel **Model Viewer → Animation Player**. Tick the checkbox in the panel header
-to add a player to the page (bottom left). It has a play/pause button, a
-timeline you can drag, a **Loop** toggle, and a button for each animation (no
-buttons if there's only one).
+to add a player to the page (bottom left): a button for each animation,
+play/pause, a timeline you can drag, a **Loop** toggle and **Reset**.
 
-- The list shows every action that isn't played by a hotspot or `ANIM_home`. Untick the ones you don't want on the page and give the others a **label** for their button (by default it's made from the action name, e.g. `ANIM_doors_open` → "Doors open"). Turn on *Include Hotspot Animations* to list those too.
-- **Play** sets whether the Loop toggle starts on (Loop, Ping-pong) or off (Once, which holds the last frame).
+Animations in the player are **independent**: each one keeps its own pose. Open
+the doors, then run a loadout, and the doors stay open. Several can even run at
+the same time.
+
+- **Loop off**: a clip button plays its animation once and holds the last frame. Press it again to play it back (open → close). Pressing it while it plays turns it around.
+- **Loop on**: a clip button starts or pauses a looping animation (ping-pong if *Play* is set to Ping-pong).
+- **Play/pause** and the **timeline** control the clip that was pressed last (highlighted). Clips that aren't at their start pose get an outline.
+- **Reset** fades all animations back to their start pose.
+- The list in the panel shows every action that isn't played by a hotspot or `ANIM_home`. Untick the ones you don't want on the page and give the others a **label** for their button (by default it's made from the action name, e.g. `ANIM_doors_open` → "Doors open"). Turn on *Include Hotspot Animations* to list those too.
+- **Play** sets whether the Loop toggle starts on (Loop, Ping-pong) or off (Once).
 - Actions marked with a ⚠ icon aren't assigned to anything, so they won't be in the GLB. The export warns and leaves them out.
-- The player is hidden while a hotspot is open. When you close the hotspot, `ANIM_home` (if there is one) takes over until you press play again.
-- Like everything else, it plays one animation at a time.
+- Two animations that move the *same* object get blended, so give each moving part its own action.
+- The player is hidden while a hotspot is open. Opening a hotspot that has an animation puts the player's animations back to their start pose first.
 
 The player needs the new `index.html`, `viewer.js` and `viewer.css`. In an
 existing output folder, set *Viewer Files → Always Overwrite* for one export

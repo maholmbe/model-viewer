@@ -111,12 +111,14 @@ class MV_SceneSettings(bpy.types.PropertyGroup):
     shadow_intensity: FloatProperty(name="Shadow Intensity", default=1.0, min=0.0, max=2.0)
 
     animation_player: BoolProperty(name="Animation Player", default=False,
-                                   description="Add play/pause, a timeline, a loop toggle and a button per "
-                                               "animation to the page")
+                                   description="Add a button per animation, play/pause, a timeline, a loop "
+                                               "toggle and a reset button to the page. Animations play "
+                                               "independently and keep their pose")
     player_mode: EnumProperty(name="Play", default="LOOP", items=(
-        ("ONCE", "Once", "Play once and hold the last frame (loop toggle off at start)"),
-        ("LOOP", "Loop", "Loop (loop toggle on at start)"),
-        ("PINGPONG", "Ping-pong", "Play back and forth (loop toggle on at start)"),
+        ("ONCE", "Once", "Loop toggle off at start: a clip button plays its animation once and holds the "
+                         "last frame; pressing it again plays it back"),
+        ("LOOP", "Loop", "Loop toggle on at start: a clip button starts/pauses a looping animation"),
+        ("PINGPONG", "Ping-pong", "Loop toggle on at start, looping back and forth"),
     ))
     player_linked: BoolProperty(name="Include Hotspot Animations", default=False,
                                 description="Also list the actions played by hotspots and ANIM_home")
