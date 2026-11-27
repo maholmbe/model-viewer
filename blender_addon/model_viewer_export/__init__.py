@@ -51,6 +51,12 @@ class MV_HotspotProps(bpy.types.PropertyGroup):
                                                 "otherwise the nearest mesh)")
 
 
+class MV_ActionProps(bpy.types.PropertyGroup):
+    show: BoolProperty(name="Show in Player", default=True,
+                       description="Add a button for this action to the page's animation player")
+    label: StringProperty(name="Label", description="Button text (default: derived from the action name)")
+
+
 class MV_VariantMaterial(bpy.types.PropertyGroup):
     object: PointerProperty(name="Object", type=bpy.types.Object)
     slot: IntProperty(name="Slot", min=0)
@@ -103,6 +109,17 @@ class MV_SceneSettings(bpy.types.PropertyGroup):
         ("none", "None", "No tone mapping, bright areas clip (like Blender's Standard)"),
     ))
     shadow_intensity: FloatProperty(name="Shadow Intensity", default=1.0, min=0.0, max=2.0)
+
+    animation_player: BoolProperty(name="Animation Player", default=False,
+                                   description="Add play/pause, a timeline, a loop toggle and a button per "
+                                               "animation to the page")
+    player_mode: EnumProperty(name="Play", default="LOOP", items=(
+        ("ONCE", "Once", "Play once and hold the last frame (loop toggle off at start)"),
+        ("LOOP", "Loop", "Loop (loop toggle on at start)"),
+        ("PINGPONG", "Ping-pong", "Play back and forth (loop toggle on at start)"),
+    ))
+    player_linked: BoolProperty(name="Include Hotspot Animations", default=False,
+                                description="Also list the actions played by hotspots and ANIM_home")
 
     export_variants: BoolProperty(name="Export Variants", default=True,
                                   description="Export the material variants (KHR_materials_variants)")
@@ -448,6 +465,40 @@ class MV_PT_environment(bpy.types.Panel):
             layout.prop(s, prop)
 
 
+class MV_PT_animations(bpy.types.Panel):
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Model Viewer"
+    bl_label = "Animation Player"
+    bl_parent_id = "MV_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene.mv_settings, "animation_player", text="")
+
+    def draw(self, context):
+        s = context.scene.mv_settings
+        layout = self.layout
+        layout.active = s.animation_player
+        col = layout.column()
+        col.use_property_split = True
+        col.use_property_decorate = False
+        col.prop(s, "player_mode")
+        col.prop(s, "player_linked")
+
+        actions = core.player_candidates(context.scene, s)
+        box = layout.box()
+        if not actions:
+            box.label(text="No other actions in this file", icon="INFO")
+        for a in actions:
+            row = box.row(align=True)
+            row.prop(a.mv_player, "show", text="")
+            sub = row.row(align=True)
+            sub.active = a.mv_player.show
+            sub.label(text=a.name, icon="ACTION" if a.users else "ERROR")
+            sub.prop(a.mv_player, "label", text="", placeholder=core.clip_label(a.name))
+
+
 class MV_UL_variants(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_prop, index=0):
         layout.prop(item, "name", text="", emboss=False, icon="MATERIAL")
@@ -501,6 +552,7 @@ class MV_PT_variants(bpy.types.Panel):
 
 CLASSES = (
     MV_HotspotProps,
+    MV_ActionProps,
     MV_VariantMaterial,
     MV_Variant,
     MV_SceneSettings,
@@ -517,6 +569,7 @@ CLASSES = (
     MV_PT_main,
     MV_PT_scene,
     MV_PT_hotspot,
+    MV_PT_animations,
     MV_PT_variants,
     MV_PT_export_settings,
     MV_PT_environment,
@@ -527,11 +580,13 @@ def register():
     for cls in CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Object.mv_hotspot = PointerProperty(type=MV_HotspotProps)
+    bpy.types.Action.mv_player = PointerProperty(type=MV_ActionProps)
     bpy.types.Scene.mv_settings = PointerProperty(type=MV_SceneSettings)
 
 
 def unregister():
     del bpy.types.Scene.mv_settings
+    del bpy.types.Action.mv_player
     del bpy.types.Object.mv_hotspot
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

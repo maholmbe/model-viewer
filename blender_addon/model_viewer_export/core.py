@@ -13,6 +13,9 @@ Naming conventions (see README.md for the full description):
 Explicit links set in the add-on panel (Object > Model Viewer Hotspot)
 override the naming convention.
 
+Actions not linked to a hotspot can be shown in an animation player on the
+page (Animation Player panel), with a button per action.
+
 Material variants are defined in the Material Variants panel and exported
 as KHR_materials_variants through the glTF add-on.
 
@@ -36,7 +39,7 @@ from mathutils.bvhtree import BVHTree
 
 from .glb import GLB
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 CAM_PREFIX = "CAM_"
 HOTSPOT_PREFIX = "HS_"
@@ -115,6 +118,37 @@ def find_hotspots(scene):
 
 def find_anim_actions():
     return {a.name: a for a in bpy.data.actions if a.name.startswith(ANIM_PREFIX)}
+
+
+def hotspot_actions(hs_id, obj, actions):
+    """(action, exit action) played by a hotspot; either may be None."""
+    p = obj.mv_hotspot
+    action = p.action or actions.get(ANIM_PREFIX + hs_id)
+    if action is None:
+        return None, None
+    return action, p.exit_action or actions.get(action.name + EXIT_SUFFIX)
+
+
+def linked_action_names(scene):
+    """Names of the actions played by the home view and the hotspots."""
+    actions = find_anim_actions()
+    names = {ANIM_PREFIX + HOME_ID} & actions.keys()
+    for hs_id, obj in find_hotspots(scene):
+        for a in hotspot_actions(hs_id, obj, actions):
+            if a is not None:
+                names.add(a.name)
+    return names
+
+
+def player_candidates(scene, settings):
+    """Actions that can appear in the page's animation player."""
+    linked = set() if settings.player_linked else linked_action_names(scene)
+    return sorted((a for a in bpy.data.actions if a.name not in linked), key=lambda a: a.name.lower())
+
+
+def clip_label(name):
+    name = split_name(name, ANIM_PREFIX) or name
+    return name.replace("_", " ").strip().capitalize() or name
 
 
 def is_helper(obj):
@@ -250,7 +284,6 @@ def collect_hotspots(ctx):
     cams = find_cameras(ctx.scene)
     actions = find_anim_actions()
     used_cams = {HOME_ID}
-    used_actions = {ANIM_PREFIX + HOME_ID}
     hotspots = []
     ctx.surface_jobs = []  # resolved against the GLB after export
 
@@ -266,16 +299,12 @@ def collect_hotspots(ctx):
             camera = camera_view(ctx, cam_obj, pos)
             used_cams.add(split_name(cam_obj.name, CAM_PREFIX) or cam_obj.name)
 
-        action = p.action or actions.get(ANIM_PREFIX + hs_id)
+        action, exit_action = hotspot_actions(hs_id, obj, actions)
         animation = None
         if action is not None:
-            exit_action = p.exit_action or actions.get(action.name + EXIT_SUFFIX)
             animation = animation_entry(
                 action.name, p.play_mode, p.reverse_on_exit, p.delay,
                 exit_action.name if exit_action else None)
-            used_actions.add(action.name)
-            if exit_action:
-                used_actions.add(exit_action.name)
 
         hotspot = {
             "id": hs_id,
@@ -294,11 +323,25 @@ def collect_hotspots(ctx):
     for cam_id, cam_obj in cams.items():
         if cam_id not in used_cams:
             ctx.warn("%s is not linked to any hotspot (no %s%s)" % (cam_obj.name, HOTSPOT_PREFIX, cam_id))
-    for name in actions:
-        if name not in used_actions:
-            ctx.warn("Action %s is not linked to any hotspot" % name)
 
     ctx.data["hotspots"] = hotspots
+
+
+def collect_player(ctx):
+    """Animation player: a button per action, play/pause, timeline, loop."""
+    s = ctx.settings
+    clips = []
+    if s.animation_player:
+        clips = [{"name": a.name, "label": a.mv_player.label.strip() or clip_label(a.name)}
+                 for a in player_candidates(ctx.scene, s) if a.mv_player.show]
+        if not clips:
+            ctx.warn("Animation player is on, but no actions are selected for it")
+    shown = {c["name"] for c in clips}
+    linked = linked_action_names(ctx.scene)
+    for name in find_anim_actions():
+        if name not in linked and name not in shown:
+            ctx.warn("Action %s is not linked to any hotspot or shown in the animation player" % name)
+    ctx.data["player"] = {"mode": s.player_mode.lower(), "clips": clips} if clips else None
 
 
 def surface_target(ctx, hs_obj):
@@ -464,6 +507,7 @@ COLLECTORS = [
     collect_model,
     collect_home,
     collect_hotspots,
+    collect_player,
     collect_limits,
     collect_environment,
     collect_variants,
@@ -623,6 +667,15 @@ def verify_animations(ctx, glb):
             if name and name not in names:
                 ctx.warn("Action %s is missing from the GLB – assign it to an object "
                          "(active action or NLA strip)" % name)
+    player = ctx.data["player"]
+    if player:
+        for clip in player["clips"]:
+            if clip["name"] not in names:
+                ctx.warn("Action %s is missing from the GLB – assign it to an object (active action "
+                         "or NLA strip) or untick it in the Animation Player panel" % clip["name"])
+        player["clips"] = [c for c in player["clips"] if c["name"] in names]
+        if not player["clips"]:
+            ctx.data["player"] = None
 
 
 def verify_variants(ctx, glb):
