@@ -1,7 +1,7 @@
 {
   "version": 3,
   "generator": "Blender 5.3.0 / model_viewer_export",
-  "generatedAt": 1795774345,
+  "generatedAt": 1795774569,
   "title": "container",
   "model": {
     "src": "model.glb",
@@ -35,8 +35,8 @@
   "environment": {
     "lighting": "environment.hdr",
     "skybox": "environment.hdr",
-    "skyboxVisible": false,
-    "backgroundToggle": false,
+    "skyboxVisible": true,
+    "backgroundToggle": true,
     "exposure": 1.0,
     "toneMapping": "agx",
     "shadowIntensity": 1.0,
