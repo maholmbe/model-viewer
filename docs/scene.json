@@ -1,251 +1,47 @@
 {
   "version": 3,
-  "generator": "Blender 5.2.2 LTS / model_viewer_export",
-  "generatedAt": 1791814061,
-  "title": "Hand drill",
+  "generator": "Blender 5.3.0 / model_viewer_export",
+  "generatedAt": 1795768407,
+  "title": "container",
   "model": {
-    "src": "hand_drill.glb",
-    "alt": "Hand drill",
+    "src": "model.glb",
+    "alt": "container",
     "center": [
-      -0.0003,
-      0.007,
-      0.0015
+      0.0233,
+      1.2766,
+      -0.1875
     ],
-    "radius": 0.2583
+    "radius": 3.5976
   },
   "home": {
-    "camera": {
-      "source": "CAM_home",
-      "target": [
-        0.0085,
-        0.0178,
-        -0.0079
-      ],
-      "orbit": [
-        37.664,
-        78.797,
-        0.9651
-      ],
-      "fov": 39.598
-    },
+    "camera": null,
     "animation": null
   },
-  "hotspots": [
-    {
-      "id": "chuck",
-      "label": "Chuck",
-      "description": "Secure your bits",
-      "position": [
-        0.0,
-        -0.1348,
-        0.0154
-      ],
-      "normal": [
-        0.0,
-        -0.0,
-        1.0
-      ],
-      "surface": "0 0 666 667 668 0.3703 0.4793 0.1504",
-      "camera": {
-        "source": "CAM_chuck",
-        "target": [
-          -0.0007,
-          -0.1572,
-          0.0155
-        ],
-        "orbit": [
-          0.0,
-          90.0,
-          0.3169
-        ],
-        "fov": 39.598
-      },
-      "animation": {
-        "name": "chuckAction",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.0
-      }
-    },
-    {
-      "id": "crank",
-      "label": "Crank",
-      "description": "Efficient power delivery",
-      "position": [
-        0.0,
-        0.0861,
-        0.0279
-      ],
-      "normal": [
-        0.0,
-        -0.0,
-        1.0
-      ],
-      "surface": "1 0 632 634 635 0.3249 0.5494 0.1257",
-      "camera": {
-        "source": "CAM_crank",
-        "target": [
-          0.0061,
-          0.0124,
-          0.038
-        ],
-        "orbit": [
-          -48.344,
-          88.351,
-          0.4884
-        ],
-        "fov": 39.598
-      },
-      "animation": {
-        "name": "crankAction",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.0
-      }
-    },
-    {
-      "id": "drillbit",
-      "label": "Drill bit",
-      "description": "Holes in the making",
-      "position": [
-        0.0032,
-        -0.1992,
-        -0.0
-      ],
-      "normal": [
-        1.0,
-        0.0,
-        -0.0
-      ],
-      "surface": "2 0 204 205 203 0.2723 0.0675 0.6602",
-      "camera": {
-        "source": "CAM_drillbit",
-        "target": [
-          -0.0007,
-          -0.2587,
-          0.0
-        ],
-        "orbit": [
-          0.0,
-          90.0,
-          0.3325
-        ],
-        "fov": 39.598
-      },
-      "animation": {
-        "name": "chuckAction",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.0
-      }
-    },
-    {
-      "id": "handle",
-      "label": "Wooden handle",
-      "description": "Never slip your grip",
-      "position": [
-        0.0,
-        0.2498,
-        0.0
-      ],
-      "normal": [
-        0.0,
-        1.0,
-        -0.0
-      ],
-      "surface": "6 0 544 545 566 0.0000 0.0004 0.9995",
-      "camera": {
-        "source": "CAM_handle",
-        "target": [
-          0.0021,
-          0.2272,
-          0.0029
-        ],
-        "orbit": [
-          51.452,
-          81.362,
-          0.5156
-        ],
-        "fov": 39.598
-      },
-      "animation": {
-        "name": "wooden_handleAction",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.0
-      }
-    },
-    {
-      "id": "knob",
-      "label": "Wooden knob",
-      "description": "For people with three hands",
-      "position": [
-        0.0,
-        -0.0,
-        -0.061
-      ],
-      "normal": [
-        -0.0,
-        -0.0,
-        -1.0
-      ],
-      "surface": "7 0 111 113 127 0.1020 0.0000 0.8980",
-      "camera": {
-        "source": "CAM_knob",
-        "target": [
-          -0.011,
-          0.0069,
-          -0.0818
-        ],
-        "orbit": [
-          115.492,
-          82.099,
-          0.3422
-        ],
-        "fov": 39.598
-      },
-      "animation": {
-        "name": "wooden_knobAction",
-        "mode": "once",
-        "reverseOnExit": true,
-        "exit": null,
-        "delay": 0.0
-      }
-    }
-  ],
+  "hotspots": [],
   "limits": {
     "minOrbit": [
       "auto",
       22.5,
-      0.1585
+      3.5976
     ],
     "maxOrbit": [
       "auto",
       157.5,
-      1.4476
+      14.3905
     ],
     "minFov": 12.0,
-    "maxFov": 47.52
+    "maxFov": 45.0
   },
   "environment": {
     "lighting": "neutral",
-    "skybox": "environment.hdr",
+    "skybox": null,
     "skyboxVisible": false,
-    "backgroundToggle": true,
+    "backgroundToggle": false,
     "exposure": 1.0,
-    "toneMapping": "neutral",
-    "shadowIntensity": 0.0,
-    "background": null
+    "toneMapping": "agx",
+    "shadowIntensity": 1.0,
+    "background": "#404040"
   },
   "variants": null,
-  "animations": [
-    "chuckAction",
-    "crankAction",
-    "wooden_handleAction",
-    "wooden_knobAction"
-  ]
+  "animations": []
 }
