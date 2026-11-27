@@ -252,13 +252,21 @@ function advance(c, dt) {
 }
 
 // Show clip c at c.time, layered on top of the other clips.
+// Layers are play-once (repetitions: 1) and frozen (timeScale 0). model-viewer
+// restarts a stopped layer that is set exactly to its end, so the last frame
+// is reached by letting the layer run its final millisecond; play-once then
+// holds the end pose. This matters for Constant (stepped) keys, where the end
+// pose only shows at the very end.
 function applyTime(c) {
-  // model-viewer restarts a stopped layer that sits exactly on its last frame,
-  // so stay a hair before it.
-  const time = Math.max(0, Math.min(c.time, c.duration - EPS));
   // After a reset the layer is still fading out; fading in replaces that.
-  viewer.appendAnimation(c.name, { time, timeScale: 0, weight: 1, fade: c.faded ? 0.2 : false });
+  const fade = c.faded ? 0.2 : false;
   c.faded = false;
+  const opts = { weight: 1, repetitions: 1, fade };
+  if (c.duration > 0 && c.time >= c.duration - EPS) {
+    viewer.appendAnimation(c.name, { ...opts, time: c.duration - EPS, timeScale: 1 });
+  } else {
+    viewer.appendAnimation(c.name, { ...opts, time: Math.max(0, c.time), timeScale: 0 });
+  }
   wake(200);
 }
 
