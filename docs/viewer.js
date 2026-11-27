@@ -1,5 +1,6 @@
 // Reads scene.json (written by the Blender add-on) and wires up
-// model-viewer: home view, hotspots, close-up cameras and animations.
+// model-viewer: home view, hotspots, close-up cameras, animations and the
+// optional animation player.
 
 const viewer = document.querySelector('#viewer');
 const info = document.querySelector('#info');
@@ -8,6 +9,11 @@ const infoText = document.querySelector('#info-text');
 const backBtn = document.querySelector('#back');
 const bgToggle = document.querySelector('#bg-toggle');
 const variantBar = document.querySelector('#variants');
+const playerBar = document.querySelector('#player');
+const playBtn = document.querySelector('#play');
+const scrub = document.querySelector('#scrub');
+const loopBtn = document.querySelector('#loop');
+const clipBar = document.querySelector('#clips');
 
 const vec = (v, unit = 'm') => v.map((c) => `${c}${unit}`).join(' ');
 const orbit = ([theta, phi, radius]) => `${theta}deg ${phi}deg ${radius}m`;
@@ -63,6 +69,7 @@ async function init() {
   }
 
   if (scene.variants?.picker) addVariantPicker(scene.variants);
+  if (scene.player) addPlayer(scene.player);
 
   backBtn.addEventListener('click', () => leave());
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') leave(); });
@@ -123,6 +130,101 @@ function addVariantPicker({ names, current }) {
     variantBar.append(b);
   }
   variantBar.hidden = false;
+}
+
+// --- Animation player -----------------------------------------------------
+// Play/pause, a timeline, a loop toggle and one button per clip. Hidden while
+// a hotspot is open; hotspot and home animations take over the model then.
+
+let player = null;  // { clips, clip: selected clip name or null, loop, pingpong, playing }
+
+function addPlayer({ clips, mode }) {
+  player = { clips, clip: null, loop: mode !== 'once', pingpong: mode === 'pingpong', playing: false };
+  loopBtn.setAttribute('aria-pressed', String(player.loop));
+
+  if (clips.length > 1) {
+    for (const c of clips) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mv-clip';
+      b.dataset.clip = c.name;
+      b.textContent = c.label;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => selectClip(c.name));
+      clipBar.append(b);
+    }
+  } else {
+    playBtn.setAttribute('aria-label', `Play ${clips[0].label}`);
+  }
+
+  playBtn.addEventListener('click', () => {
+    if (!player.clip) selectClip(clips[0].name);
+    else if (player.playing) viewer.pause();
+    else resumeClip();
+  });
+  loopBtn.addEventListener('click', () => {
+    player.loop = !player.loop;
+    loopBtn.setAttribute('aria-pressed', String(player.loop));
+    if (player.clip && player.playing) resumeClip();  // apply the new mode
+  });
+  scrub.addEventListener('input', () => {
+    viewer.pause();
+    viewer.currentTime = Number(scrub.value) * viewer.duration;
+    requestOcclusion();
+  });
+
+  viewer.addEventListener('play', () => setPlaying(player.clip != null && viewer.animationName === player.clip));
+  viewer.addEventListener('pause', () => setPlaying(false));
+  viewer.addEventListener('finished', () => setPlaying(false));
+
+  const tick = () => {
+    if (player.playing && viewer.duration > 0) {
+      const t = viewer.currentTime % viewer.duration;
+      scrub.value = String((t < 0 ? t + viewer.duration : t) / viewer.duration);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+
+  playerBar.hidden = false;
+}
+
+const playerMode = () => (player.loop ? (player.pingpong ? 'pingpong' : 'loop') : 'once');
+
+function setPlaying(playing) {
+  player.playing = playing;
+  playBtn.classList.toggle('mv-playing', playing);
+  playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+}
+
+// Start a clip from the beginning.
+async function selectClip(name) {
+  token++;  // cancel pending hotspot/home callbacks
+  player.clip = name;
+  for (const b of clipBar.children) b.setAttribute('aria-pressed', String(b.dataset.clip === name));
+  scrub.disabled = false;
+  await playClip(name, { mode: playerMode() });
+  viewer.currentTime = 0;
+  setPlaying(true);
+}
+
+// Continue the selected clip where it is (from the start if it has ended).
+async function resumeClip() {
+  token++;
+  let t = viewer.currentTime;
+  if (!player.loop && viewer.duration - t < 0.05) t = 0;
+  await playClip(player.clip, { mode: playerMode() });
+  viewer.currentTime = t;
+  setPlaying(true);
+}
+
+function resetPlayer() {
+  if (!player) return;
+  player.clip = null;
+  setPlaying(false);
+  for (const b of clipBar.children) b.setAttribute('aria-pressed', 'false');
+  scrub.value = '0';
+  scrub.disabled = true;
 }
 
 // --- Hotspot occlusion ---------------------------------------------------
@@ -219,6 +321,8 @@ function enter(h) {
   active = h;
   h.element.classList.add('mv-active');
   viewer.classList.add('mv-focused');
+  playerBar.hidden = true;
+  if (h.animation) resetPlayer();
 
   infoTitle.textContent = h.label;
   infoText.textContent = h.description || '';
@@ -239,6 +343,7 @@ function leave() {
   h.element.classList.remove('mv-active');
   viewer.classList.remove('mv-focused');
   info.hidden = true;
+  playerBar.hidden = !player;
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 
   setView(homeView);
